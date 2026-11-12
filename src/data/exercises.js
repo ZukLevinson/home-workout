@@ -1,3 +1,13 @@
+// Exact home equipment inventory from the user's spinlock set (zero abbreviations):
+export const EQUIPMENT_SUMMARY_ITEMS = [
+  '4 פלטות × 5 קילוגרם',
+  '4 פלטות × 2.5 קילוגרם',
+  '6 פלטות × 1.25 קילוגרם',
+  '6 פלטות × 0.5 קילוגרם',
+  '2 מוטות יד קצרים (2 קילוגרם למוט עם סוגרים)',
+  'מוט ארוך 152 סנטימטר (6 קילוגרם עם סוגרים)',
+];
+
 export const GLOSSARY_ITEMS = [
   {
     title: '1. מה זה "חזרה"?',
@@ -9,7 +19,7 @@ export const GLOSSARY_ITEMS = [
   },
   {
     title: '3. איזה משקל לבחור?',
-    body: 'באימון הראשון התחל ממשקל קל ונוח. רשום את המשקל בכרטיס התרגיל, ובפעם הבאה האפליקציה תזכיר לך בדיוק כמה הרמת!',
+    body: 'האתר מציג לך בכל תרגיל אך ורק משקלים שאפשר באמת להרכיב מהפלטות והמוטות שיש לך בארגז – וכותב לך אילו פלטות לשים בכל צד!',
   },
   {
     title: '4. מתי לעצור בסט?',
@@ -30,11 +40,11 @@ export const WEEKLY_SCHEDULE = [
 export const SETUP_MESSAGES = {
   workoutA: {
     title: '🔧 אימון בית 1: חזה, גב וזרועות (בערך 40 דקות)',
-    desc: 'הזן את המשקל ומספר החזרות בכל סט וסמן "בוצע". בסוף האימון לחץ למטה על "שמור אימון ביומן" כדי לתעד את ההתקדמות שלך בענן!',
+    desc: 'בחר בכל תרגיל משקל מתוך המשקלים האפשריים בערכה שלך (כולל הוראות הרכבת פלטות אוטומטיות) וסמן "בוצע". בסיום שמור ביומן!',
   },
   workoutB: {
     title: '🔧 אימון בית 2: כתפיים, גב וזרועות (בערך 40 דקות)',
-    desc: 'המשקלים שהרמת בפעם הקודמת מופיעים לך אוטומטית בכל תרגיל. נסה להוסיף חזרה אחת או חצי קילוגרם כשמרגיש לך קל!',
+    desc: 'המשקלים שהרמת בפעם הקודמת מופיעים לך אוטומטית בכל תרגיל ומותאמים רק לפלטות שבבית. לחץ + כדי לעלות למדרגת המשקל האפשרית הבאה!',
   },
   express: {
     title: '⚡ אימון קצר של 20 דקות – פתרון מעולה לשבוע עמוס',
@@ -60,9 +70,11 @@ export const EXERCISES = [
     muscle: 'חזה',
     secondaryMuscles: 'יד אחורית (מאחורי הזרוע) וכתפיים',
     equipment: 'שתי משקולות יד שוות (למשל 8 עד 18 קילוגרם בכל יד) או המוט הארוך + מזרן',
+    equipmentMode: 'pair',
+    allowBarbellToggle: true,
     sets: 4,
     reps: '8 עד 12 חזרות',
-    defaultWeight: 10,
+    defaultWeight: 9.5,
     defaultReps: 10,
     weightUnitLabel: 'קילוגרם (לכל יד)',
     tempo: 'ירידה איטית (3 שניות), עצירה קצרה על הרצפה ודחיפה למעלה',
@@ -88,12 +100,13 @@ export const EXERCISES = [
     name: 'משיכת משקולת ביד אחת בהישענות על הספסל (חתירה לגב)',
     muscle: 'גב',
     secondaryMuscles: 'צידי הגב, גב אמצעי ויד קדמית',
-    equipment: 'משקולת יד אחת (למשל 12 עד 25 קילוגרם) + ספסל איקאה צמוד לקיר',
+    equipment: 'משקולת יד אחת (למשל 12 עד 25.5 קילוגרם) + ספסל איקאה צמוד לקיר',
+    equipmentMode: 'single',
     sets: 4,
     reps: '10 עד 12 חזרות ביד ימין, ואז 10 עד 12 חזרות ביד שמאל',
     defaultWeight: 14,
     defaultReps: 10,
-    weightUnitLabel: 'קילוגרם (במשקולת)',
+    weightUnitLabel: 'קילוגרם (במשקולת אחת)',
     tempo: 'משיכה למעלה, החזקה של שנייה והורדה מבוקרת',
     restSec: 60,
     animKeys: ['benchRow'],
@@ -116,12 +129,13 @@ export const EXERCISES = [
     name: 'שכיבות סמיכה עם רגליים מוגבהות על הספסל',
     muscle: 'חזה',
     secondaryMuscles: 'חלק עליון של החזה, כתפיים ושרירי הבטן',
-    equipment: 'ספסל איקאה צמוד לקיר',
+    equipment: 'ספסל איקאה צמוד לקיר (משקל גוף, או פלטה קלה על הגב למתקדמים)',
+    equipmentMode: 'bodyweight',
     sets: 3,
     reps: '8 עד 15 חזרות (לפי היכולת שלך)',
     defaultWeight: 0,
     defaultReps: 12,
-    weightUnitLabel: 'תוספת משקל (0 = משקל גוף)',
+    weightUnitLabel: 'תוספת פלטה (0 = משקל גוף)',
     tempo: 'ירידה איטית בשליטה, דחיפה חזקה למעלה',
     restSec: 75,
     animKeys: ['elevatedPushup'],
@@ -144,7 +158,8 @@ export const EXERCISES = [
     name: 'כפיפה ויישור מרפקים בשכיבה (חיזוק יד אחורית)',
     muscle: 'יד אחורית',
     secondaryMuscles: 'החלק האחורי של הזרוע',
-    equipment: 'שתי משקולות יד קלות-בינוניות (למשל 5 עד 10 קילוגרם בכל יד) + מזרן',
+    equipment: 'שתי משקולות יד שוות (למשל 5.5 עד 10.5 קילוגרם בכל יד) + מזרן',
+    equipmentMode: 'pair',
     sets: 3,
     reps: '10 עד 15 חזרות',
     defaultWeight: 7,
@@ -172,12 +187,13 @@ export const EXERCISES = [
     name: 'כפיפת מרפקים בעמידה עם המוט הארוך (חיזוק יד קדמית)',
     muscle: 'יד קדמית',
     secondaryMuscles: 'קדמת הזרוע והאמות',
-    equipment: 'המוט הארוך של 152 סנטימטר (למשל 12 עד 24 קילוגרם בסך הכל)',
+    equipment: 'המוט הארוך של 152 סנטימטר (למשל 11 עד 24.5 קילוגרם בסך הכל)',
+    equipmentMode: 'barbell',
     sets: 3,
     reps: '10 עד 12 חזרות',
     defaultWeight: 16,
     defaultReps: 10,
-    weightUnitLabel: 'קילוגרם (בסך הכל במוט)',
+    weightUnitLabel: 'קילוגרם (בסך הכל במוט הארוך)',
     tempo: 'עלייה חלקה, והורדה איטית של 3 שניות',
     restSec: 60,
     animKeys: ['barbellCurl'],
@@ -201,7 +217,8 @@ export const EXERCISES = [
     name: 'לחיצת כתפיים מעל הראש בכריעת ברך',
     muscle: 'כתפיים',
     secondaryMuscles: 'כתפיים, יד אחורית ושרירי הבטן',
-    equipment: 'שתי משקולות יד (למשל 6 עד 14 קילוגרם בכל יד) + כרית או מזרן מקופל מתחת לברך',
+    equipment: 'שתי משקולות יד שוות (למשל 5.5 עד 14.5 קילוגרם בכל יד) + כרית או מזרן מקופל מתחת לברך',
+    equipmentMode: 'pair',
     sets: 4,
     reps: '8 עד 12 חזרות',
     defaultWeight: 9.5,
@@ -229,12 +246,13 @@ export const EXERCISES = [
     name: 'חתירה בעמידה כפופה עם המוט הארוך (לגב העליון)',
     muscle: 'גב',
     secondaryMuscles: 'גב עליון, צידי הגב וכתף אחורית',
-    equipment: 'המוט הארוך של 152 סנטימטר (למשל 20 עד 38 קילוגרם בסך הכל)',
+    equipment: 'המוט הארוך של 152 סנטימטר (למשל 18.5 עד 38.5 קילוגרם בסך הכל)',
+    equipmentMode: 'barbell',
     sets: 4,
     reps: '10 עד 12 חזרות',
     defaultWeight: 26,
     defaultReps: 10,
-    weightUnitLabel: 'קילוגרם (בסך הכל במוט)',
+    weightUnitLabel: 'קילוגרם (בסך הכל במוט הארוך)',
     tempo: 'משיכה לבטן, עצירה קצרה למעלה והורדה איטית',
     restSec: 90,
     animKeys: ['barbellRow'],
@@ -257,7 +275,8 @@ export const EXERCISES = [
     name: 'פתיחה וסגירה של הידיים בשכיבה על הרצפה ("פרפר" לחזה)',
     muscle: 'חזה',
     secondaryMuscles: 'שרירי החזה והכתף הקדמית',
-    equipment: 'שתי משקולות יד קלות-בינוניות (למשל 6 עד 12 קילוגרם בכל יד) + מזרן',
+    equipment: 'שתי משקולות יד שוות (למשל 5.5 עד 12 קילוגרם בכל יד) + מזרן',
+    equipmentMode: 'pair',
     sets: 3,
     reps: '12 עד 15 חזרות',
     defaultWeight: 8,
@@ -286,7 +305,8 @@ export const EXERCISES = [
     name: 'צמד תרגילים ברצף לכתפיים: הרמה לצדדים + הרמה בהטיה קדימה',
     muscle: 'כתפיים',
     secondaryMuscles: 'צידי הכתפיים והחלק האחורי של הכתף',
-    equipment: 'פלטת ברזל של 2.5 או 5 קילוגרם מוחזקת ישירות בכל יד (ללא מוט!)',
+    equipment: 'פלטת ברזל מהארגז (0.5, 1.25, 2.5 או 5 קילוגרם) מוחזקת ישירות בכל יד ללא מוט',
+    equipmentMode: 'platePair',
     sets: 3,
     reps: '12 עד 15 חזרות לצדדים, ומיד 12 עד 15 חזרות בהטיה קדימה',
     defaultWeight: 2.5,
@@ -301,7 +321,7 @@ export const EXERCISES = [
       { label: 'סרטון לתרגיל 2 (בהטיה)', url: 'https://www.youtube.com/shorts/__xmBVfQMLc' },
     ],
     steps: [
-      'תרגיל ראשון (בעמידה): החזק פלטה של 2.5 או 5 קילוגרם בכל יד לצידי הגוף. הרם את שתי הידיים לצדדים עד גובה הכתפיים והורד לאט – בצע 12 עד 15 חזרות.',
+      'תרגיל ראשון (בעמידה): החזק פלטה מהארגז בכל יד לצידי הגוף. הרם את שתי הידיים לצדדים עד גובה הכתפיים והורד לאט – בצע 12 עד 15 חזרות.',
       'מיד בלי הפסקה עבור לתרגיל השני: כופף מעט ברכיים והטה את פלג הגוף העליון קדימה לכיוון הרצפה עם גב ישר.',
       'מאותו מצב כפוף, פתח את שתי הידיים לצדדים לכיוון התקרה לעוד 12 עד 15 חזרות (עובד על החלק האחורי של הכתף).',
       'רק עכשיו הנח את הפלטות, נוח 60 שניות, וחזור על הצמד 3 פעמים בסך הכל.',
@@ -316,7 +336,8 @@ export const EXERCISES = [
     name: 'צמד תרגילים ברצף לזרועות: כפיפת מרפקים + דחיפה אחורית על הספסל',
     muscle: 'יד קדמית',
     secondaryMuscles: 'קדמת הזרוע, אחורי הזרוע והאמות',
-    equipment: 'שתי משקולות יד (למשל 7 עד 13 קילוגרם בכל יד) + ספסל איקאה צמוד לקיר',
+    equipment: 'שתי משקולות יד שוות (למשל 7 עד 13 קילוגרם בכל יד) + ספסל איקאה צמוד לקיר',
+    equipmentMode: 'pair',
     sets: 3,
     reps: '10 עד 12 כפיפות מרפקים, ומיד 10 עד 15 דחיפות על הספסל',
     defaultWeight: 8,
@@ -342,6 +363,35 @@ export const EXERCISES = [
 ];
 
 export function buildConfigsForMode(mode) {
+  if (mode === 'platePair') {
+    // Holding matching plates directly in each hand (2 hands => need at least 2 of that plate, all 4 sizes have >=4!)
+    return [0.5, 1.25, 2.5, 5].map((w) => ({
+      totalWeight: w,
+      barWeight: 0,
+      sideWeight: w,
+      c5: w === 5 ? 1 : 0,
+      c25: w === 2.5 ? 1 : 0,
+      c125: w === 1.25 ? 1 : 0,
+      c05: w === 0.5 ? 1 : 0,
+      totalPlatesSide: 1,
+      mode: 'platePair',
+    }));
+  }
+
+  if (mode === 'bodyweight') {
+    return [0, 0.5, 1.25, 2.5, 5].map((w) => ({
+      totalWeight: w,
+      barWeight: 0,
+      sideWeight: w,
+      c5: w === 5 ? 1 : 0,
+      c25: w === 2.5 ? 1 : 0,
+      c125: w === 1.25 ? 1 : 0,
+      c05: w === 0.5 ? 1 : 0,
+      totalPlatesSide: w === 0 ? 0 : 1,
+      mode: 'bodyweight',
+    }));
+  }
+
   const barWeight = mode === 'barbell' ? 6.0 : 2.0;
   const maxPerSide =
     mode === 'pair'
@@ -370,6 +420,7 @@ export function buildConfigsForMode(mode) {
               c125,
               c05,
               totalPlatesSide,
+              mode,
             });
           }
         }
@@ -377,4 +428,52 @@ export function buildConfigsForMode(mode) {
     }
   }
   return Array.from(map.values()).sort((a, b) => a.totalWeight - b.totalWeight);
+}
+
+export function snapToSupportedWeight(rawWeight, configs) {
+  if (!configs || configs.length === 0) return rawWeight;
+  const num = Number(rawWeight);
+  if (Number.isNaN(num)) return configs[0].totalWeight;
+  let best = configs[0].totalWeight;
+  let bestDiff = Math.abs(num - best);
+  for (let i = 1; i < configs.length; i++) {
+    const d = Math.abs(num - configs[i].totalWeight);
+    if (d < bestDiff) {
+      bestDiff = d;
+      best = configs[i].totalWeight;
+    }
+  }
+  return best;
+}
+
+export function describeConfigSetup(cfg, mode) {
+  if (!cfg) return '';
+  if (mode === 'platePair') {
+    return `מחזיקים פלטה אחת של ${cfg.totalWeight} קילוגרם ישירות בכל יד (ללא מוט)`;
+  }
+  if (mode === 'bodyweight') {
+    if (cfg.totalWeight === 0) {
+      return 'משקל גוף בלבד (ללא תוספת פלטות)';
+    }
+    return `תוספת פלטה אחת של ${cfg.totalWeight} קילוגרם מהארגז`;
+  }
+
+  const barLabel =
+    mode === 'barbell'
+      ? 'מוט ארוך (6 קילוגרם עם סוגרים)'
+      : mode === 'pair'
+      ? 'שני מוטות יד קצרים (2 קילוגרם למוט עם סוגרים)'
+      : 'מוט יד קצר אחד (2 קילוגרם עם סוגרים)';
+
+  if (cfg.totalPlatesSide === 0) {
+    return `${barLabel} – ללא פלטות כלל`;
+  }
+
+  const parts = [];
+  if (cfg.c5 > 0) parts.push(`${cfg.c5} × 5 קילוגרם`);
+  if (cfg.c25 > 0) parts.push(`${cfg.c25} × 2.5 קילוגרם`);
+  if (cfg.c125 > 0) parts.push(`${cfg.c125} × 1.25 קילוגרם`);
+  if (cfg.c05 > 0) parts.push(`${cfg.c05} × 0.5 קילוגרם`);
+
+  return `${barLabel} + בכל צד של המוט משחילים: ${parts.join(' + ')}`;
 }
