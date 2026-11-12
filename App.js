@@ -36,6 +36,7 @@ import {
   describeConfigSetup,
 } from './src/data/exercises';
 import ExerciseAnimation from './src/components/ExerciseAnimation';
+import EquipmentBuildDiagram from './src/components/EquipmentBuildDiagram';
 import ProgressChart from './src/components/ProgressChart';
 import { isFirebaseConfigured } from './src/firebaseConfig';
 import {
@@ -84,8 +85,6 @@ export default function App() {
 
   // Optional per-exercise mode override (e.g. ex1 Floor Press can toggle pair <-> barbell)
   const [exModeOverrides, setExModeOverrides] = useState({});
-  // Per-set expanded inline weight picker (`${exId}-${setNum}` or null)
-  const [openSetPickerKey, setOpenSetPickerKey] = useState(null);
 
   // Rest timer state
   const [timerSeconds, setTimerSeconds] = useState(90);
@@ -294,7 +293,6 @@ export default function App() {
       ...activeDraft,
       [key]: { ...cur, weight: exactWeight },
     });
-    setOpenSetPickerKey(null);
   };
 
   // Apply chosen supported weight to all uncompleted sets of this exercise (or all sets if all done)
@@ -1087,18 +1085,6 @@ export default function App() {
                 const effectiveMode = getEffectiveMode(ex);
                 const exConfigs = getConfigsForExercise(ex);
 
-                // Representative weight (first uncompleted set, or set 1)
-                let primarySetEntry = getSetEntry(ex, 1);
-                for (let s = 1; s <= effectiveSets; s++) {
-                  const e = getSetEntry(ex, s);
-                  if (!e.done) {
-                    primarySetEntry = e;
-                    break;
-                  }
-                }
-                const primaryCfg =
-                  exConfigs.find((c) => c.totalWeight === primarySetEntry.weight) || exConfigs[0];
-
                 const unitLabel =
                   effectiveMode === 'barbell'
                     ? 'קילוגרם בסך הכל במוט הארוך'
@@ -1322,7 +1308,7 @@ export default function App() {
                           </View>
                         </View>
 
-                        {/* SUPPORTED HOME EQUIPMENT WEIGHT PICKER + PER-SET LOGGER */}
+                        {/* PER-SET SUPPORTED WEIGHT PICKER + ANIMATED BUILD DRAWING + REPS LOGGER */}
                         <View style={[styles.loggerSection, { borderTopColor: colors.border }]}>
                           <View style={styles.rowBetween}>
                             <Text
@@ -1331,7 +1317,7 @@ export default function App() {
                                 { color: colors.foreground, fontFamily: fBold },
                               ]}
                             >
-                              ✍️ בחירת משקל מהערכה שלך ({unitLabel}):
+                              ✍️ בחירת משקל והרכבת ציוד בכל סט ({unitLabel}):
                             </Text>
 
                             {ex.allowBarbellToggle && (
@@ -1375,88 +1361,10 @@ export default function App() {
                             )}
                           </View>
 
-                          {/* Supported Kilogram Chips Box */}
-                          <View
-                            style={[
-                              styles.supportedWeightsBox,
-                              { backgroundColor: colors.background, borderColor: colors.border },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.supportedWeightsCaption,
-                                { color: colors.mutedForeground, fontFamily: fReg },
-                              ]}
-                            >
-                              משקלים אפשריים להרכבה בערכה הביתית שלך (לחיצה מעדכנת את הסטים הפתוחים):
-                            </Text>
-                            <ScrollView
-                              horizontal
-                              showsHorizontalScrollIndicator={false}
-                              contentContainerStyle={styles.chipsScrollRow}
-                            >
-                              {exConfigs.map((cfg) => {
-                                const selected = cfg.totalWeight === primarySetEntry.weight;
-                                return (
-                                  <Pressable
-                                    key={cfg.totalWeight}
-                                    onPress={() => selectWeightForExercise(ex, cfg.totalWeight)}
-                                    style={[
-                                      styles.weightOptionChip,
-                                      {
-                                        backgroundColor: selected ? colors.primary : colors.card,
-                                        borderColor: selected ? colors.primary : colors.border,
-                                      },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.smallBtnText,
-                                        {
-                                          color: selected
-                                            ? colors.primaryForeground
-                                            : colors.foreground,
-                                          fontFamily: selected ? fBold : fMed,
-                                        },
-                                      ]}
-                                    >
-                                      {cfg.totalWeight === 0
-                                        ? '0 (משקל גוף)'
-                                        : `${cfg.totalWeight}`}
-                                    </Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </ScrollView>
-
-                            {/* Live Plate Recipe for Selected Weight */}
-                            <View
-                              style={[
-                                styles.plateRecipeBar,
-                                { backgroundColor: colors.card, borderColor: colors.border },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.plateRecipeText,
-                                  { color: colors.foreground, fontFamily: fMed },
-                                ]}
-                              >
-                                🔩{' '}
-                                <Text style={{ color: colors.primary, fontFamily: fBold }}>
-                                  איך מרכיבים {primaryCfg.totalWeight} קילוגרם:{' '}
-                                </Text>
-                                {describeConfigSetup(primaryCfg, effectiveMode)}
-                              </Text>
-                            </View>
-                          </View>
-
-                          {/* Per-Set Rows */}
-                          <View style={{ gap: 8 }}>
+                          {/* Per-Set Self-Contained Cards */}
+                          <View style={{ gap: 12 }}>
                             {Array.from({ length: effectiveSets }, (_, i) => i + 1).map((setNum) => {
                               const entry = getSetEntry(ex, setNum);
-                              const setKey = `${ex.id}-${setNum}`;
-                              const isPickerOpen = openSetPickerKey === setKey;
                               const setCfg =
                                 exConfigs.find((c) => c.totalWeight === entry.weight) ||
                                 exConfigs[0];
@@ -1467,16 +1375,18 @@ export default function App() {
                               const atMax = curCfgIdx >= exConfigs.length - 1;
 
                               return (
-                                <View key={setNum} style={{ gap: 6 }}>
-                                  <View
-                                    style={[
-                                      styles.setRow,
-                                      {
-                                        backgroundColor: colors.background,
-                                        borderColor: entry.done ? colors.primary : colors.border,
-                                      },
-                                    ]}
-                                  >
+                                <View
+                                  key={setNum}
+                                  style={[
+                                    styles.setCard,
+                                    {
+                                      backgroundColor: colors.background,
+                                      borderColor: entry.done ? colors.primary : colors.border,
+                                    },
+                                  ]}
+                                >
+                                  {/* Set Top Controls: Label + Weight Stepper + Reps Stepper + Done */}
+                                  <View style={styles.setCardHeaderRow}>
                                     <Text
                                       style={[
                                         styles.setLabel,
@@ -1486,7 +1396,7 @@ export default function App() {
                                       סט {setNum}
                                     </Text>
 
-                                    {/* Supported Weight Stepper + Inline Picker Trigger */}
+                                    {/* Supported Weight Stepper */}
                                     <View style={styles.stepperGroup}>
                                       <Pressable
                                         disabled={atMin}
@@ -1510,17 +1420,12 @@ export default function App() {
                                         </Text>
                                       </Pressable>
 
-                                      <Pressable
-                                        onPress={() =>
-                                          setOpenSetPickerKey(isPickerOpen ? null : setKey)
-                                        }
+                                      <View
                                         style={[
                                           styles.weightDisplayPill,
                                           {
                                             backgroundColor: colors.card,
-                                            borderColor: isPickerOpen
-                                              ? colors.primary
-                                              : colors.border,
+                                            borderColor: colors.primary,
                                           },
                                         ]}
                                       >
@@ -1532,10 +1437,9 @@ export default function App() {
                                         >
                                           {entry.weight === 0
                                             ? 'משקל גוף (0)'
-                                            : `${entry.weight} קילוגרם`}{' '}
-                                          ▾
+                                            : `${entry.weight} קילוגרם`}
                                         </Text>
-                                      </Pressable>
+                                      </View>
 
                                       <Pressable
                                         disabled={atMax}
@@ -1651,73 +1555,122 @@ export default function App() {
                                     </Pressable>
                                   </View>
 
-                                  {/* Per-set inline dropdown of supported weights + recipe */}
-                                  {isPickerOpen && (
+                                  {/* Per-Set Weight Picker Chips (Directly Inside Set) */}
+                                  <View
+                                    style={[
+                                      styles.setWeightSection,
+                                      { borderTopColor: colors.border },
+                                    ]}
+                                  >
+                                    <View style={styles.setCopyRow}>
+                                      <Text
+                                        style={[
+                                          styles.supportedWeightsCaption,
+                                          { color: colors.mutedForeground, fontFamily: fMed },
+                                        ]}
+                                      >
+                                        משקלים זמינים בערכה לסט {setNum}:
+                                      </Text>
+                                      {effectiveSets > 1 && (
+                                        <Pressable
+                                          onPress={() =>
+                                            selectWeightForExercise(ex, entry.weight)
+                                          }
+                                          style={[
+                                            styles.copyAllSetsBtn,
+                                            {
+                                              backgroundColor: colors.card,
+                                              borderColor: colors.border,
+                                            },
+                                          ]}
+                                        >
+                                          <Text
+                                            style={[
+                                              styles.copyAllSetsText,
+                                              { color: colors.primary, fontFamily: fSemi },
+                                            ]}
+                                          >
+                                            העתק משקל לכל הסטים הפתוחים
+                                          </Text>
+                                        </Pressable>
+                                      )}
+                                    </View>
+
+                                    <ScrollView
+                                      horizontal
+                                      showsHorizontalScrollIndicator={false}
+                                      contentContainerStyle={styles.chipsScrollRow}
+                                    >
+                                      {exConfigs.map((cfg) => {
+                                        const selected = cfg.totalWeight === entry.weight;
+                                        return (
+                                          <Pressable
+                                            key={cfg.totalWeight}
+                                            onPress={() =>
+                                              selectWeightForSet(ex, setNum, cfg.totalWeight)
+                                            }
+                                            style={[
+                                              styles.weightOptionChip,
+                                              {
+                                                backgroundColor: selected
+                                                  ? colors.primary
+                                                  : colors.card,
+                                                borderColor: selected
+                                                  ? colors.primary
+                                                  : colors.border,
+                                              },
+                                            ]}
+                                          >
+                                            <Text
+                                              style={[
+                                                styles.smallBtnText,
+                                                {
+                                                  color: selected
+                                                    ? colors.primaryForeground
+                                                    : colors.foreground,
+                                                  fontFamily: selected ? fBold : fMed,
+                                                },
+                                              ]}
+                                            >
+                                              {cfg.totalWeight === 0
+                                                ? '0 (משקל גוף)'
+                                                : `${cfg.totalWeight}`}
+                                            </Text>
+                                          </Pressable>
+                                        );
+                                      })}
+                                    </ScrollView>
+
+                                    {/* Animated Circular-Plate Equipment Diagram Inside Set */}
+                                    <EquipmentBuildDiagram
+                                      cfg={setCfg}
+                                      mode={effectiveMode}
+                                      paused={animPaused}
+                                      colors={colors}
+                                      fontsLoaded={fontsLoaded}
+                                    />
+
+                                    {/* Plate Recipe Summary Inside Set */}
                                     <View
                                       style={[
-                                        styles.inlineSetPicker,
-                                        {
-                                          backgroundColor: colors.card,
-                                          borderColor: colors.primary,
-                                        },
+                                        styles.plateRecipeBar,
+                                        { backgroundColor: colors.card, borderColor: colors.border },
                                       ]}
                                     >
                                       <Text
                                         style={[
-                                          styles.supportedWeightsCaption,
-                                          { color: colors.foreground, fontFamily: fSemi },
+                                          styles.plateRecipeText,
+                                          { color: colors.foreground, fontFamily: fMed },
                                         ]}
                                       >
-                                        בחר משקל לסט {setNum} (מתוך הפלטות שלך):
-                                      </Text>
-                                      <View style={styles.filterRow}>
-                                        {exConfigs.map((cfg) => {
-                                          const sel = cfg.totalWeight === entry.weight;
-                                          return (
-                                            <Pressable
-                                              key={cfg.totalWeight}
-                                              onPress={() =>
-                                                selectWeightForSet(ex, setNum, cfg.totalWeight)
-                                              }
-                                              style={[
-                                                styles.weightOptionChip,
-                                                {
-                                                  backgroundColor: sel
-                                                    ? colors.primary
-                                                    : colors.background,
-                                                  borderColor: sel ? colors.primary : colors.border,
-                                                },
-                                              ]}
-                                            >
-                                              <Text
-                                                style={[
-                                                  styles.smallBtnText,
-                                                  {
-                                                    color: sel
-                                                      ? colors.primaryForeground
-                                                      : colors.foreground,
-                                                    fontFamily: sel ? fBold : fMed,
-                                                  },
-                                                ]}
-                                              >
-                                                {cfg.totalWeight === 0
-                                                  ? '0 (משקל גוף)'
-                                                  : `${cfg.totalWeight} קילוגרם`}
-                                              </Text>
-                                            </Pressable>
-                                          );
-                                        })}
-                                      </View>
-                                      <Text
-                                        style={[
-                                          styles.supportedWeightsCaption,
-                                          { color: colors.mutedForeground, fontFamily: fReg },
-                                        ]}
-                                      >
-                                        🔩 {describeConfigSetup(setCfg, effectiveMode)}
+                                        🔩{' '}
+                                        <Text style={{ color: colors.primary, fontFamily: fBold }}>
+                                          איך מרכיבים {setCfg.totalWeight} קילוגרם:{' '}
+                                        </Text>
+                                        {describeConfigSetup(setCfg, effectiveMode)}
                                       </Text>
                                     </View>
-                                  )}
+                                  </View>
                                 </View>
                               );
                             })}
@@ -2915,11 +2868,41 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  supportedWeightsBox: {
+  setCard: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 14,
+    padding: 12,
+    gap: 10,
+  },
+  setCardHeaderRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
+  },
+  setWeightSection: {
+    borderTopWidth: 1,
+    paddingTop: 10,
+    gap: 8,
+  },
+  setCopyRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  copyAllSetsBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  copyAllSetsText: {
+    fontSize: 11,
+    textAlign: 'right',
+    writingDirection: 'rtl',
   },
   supportedWeightsCaption: {
     fontSize: 12,
@@ -2952,17 +2935,6 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     writingDirection: 'rtl',
   },
-  setRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
   setLabel: {
     fontSize: 12,
     minWidth: 42,
@@ -2993,12 +2965,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  inlineSetPicker: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 10,
-    gap: 8,
   },
   stepperInputSmall: {
     width: 48,
