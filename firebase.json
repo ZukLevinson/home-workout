@@ -1,19 +1,24 @@
 {
   "firestore": {
+    "database": "(default)",
+    "location": "eur3",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
   "auth": {
     "providers": {
-      "anonymous": true
+      "anonymous": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Home Workout",
+        "supportEmail": "zuklevinson@gmail.com"
+      }
     }
   },
   "hosting": {
     "public": "dist",
     "ignore": [
       "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
+      "**/.*"
     ],
     "rewrites": [
       {
