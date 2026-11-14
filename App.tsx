@@ -140,14 +140,6 @@ export default function App(): React.ReactElement {
   const [importModalOpen, setImportModalOpen] = useState<boolean>(false);
   const [importJsonText, setImportJsonText] = useState<string>('');
 
-  // Plate calculator state
-  const [calcMode, setCalcMode] = useState<EquipmentMode>('pair');
-  const calcConfigs = useMemo(
-    () => CONFIG_CACHE[calcMode] || buildConfigsForMode(calcMode),
-    [calcMode]
-  );
-  const [calcIdx, setCalcIdx] = useState<number>(6);
-
   const draftSyncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -664,9 +656,6 @@ export default function App(): React.ReactElement {
     };
   }, [sortedHistoryDesc]);
 
-  const safeCalcIdx = Math.min(calcIdx, Math.max(0, calcConfigs.length - 1));
-  const activeCalcCfg = calcConfigs[safeCalcIdx] || calcConfigs[0];
-
   const fReg = fontForWeight('regular', fontsLoaded);
   const fMed = fontForWeight('medium', fontsLoaded);
   const fSemi = fontForWeight('semibold', fontsLoaded);
@@ -676,7 +665,6 @@ export default function App(): React.ReactElement {
     { key: 'workoutA', label: 'אימון A: חזה, גב וזרועות', mobileLabel: 'אימון A' },
     { key: 'workoutB', label: 'אימון B: כתפיים, גב וזרועות', mobileLabel: 'אימון B' },
     { key: 'all', label: 'כל התרגילים', mobileLabel: 'כל התרגילים' },
-    { key: 'calculator', label: '🔩 מחשבון פלטות', mobileLabel: '🔩 פלטות' },
   ];
 
   const selectMainTab = (nextTab: WorkoutTabKey) => {
@@ -698,7 +686,7 @@ export default function App(): React.ReactElement {
     }
   };
 
-  const isWorkoutTab = currentTab !== 'progress' && currentTab !== 'calculator';
+  const isWorkoutTab = currentTab !== 'progress';
   const safeExIdx =
     visibleExercises.length > 0 ? Math.min(currentExerciseIdx, visibleExercises.length - 1) : 0;
   const activeEx = isWorkoutTab ? visibleExercises[safeExIdx] || null : null;
@@ -2412,330 +2400,6 @@ export default function App(): React.ReactElement {
                       ))}
                     </View>
                   )}
-                </View>
-              </View>
-            )}
-
-            {/* PLATE CALCULATOR SECTION */}
-            {currentTab === 'calculator' && activeCalcCfg && (
-              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  מחשבון הרכבת פלטות חכם – AI Trainer
-                </Text>
-                <Text
-                  style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
-                >
-                  סט הפלטות המוגדר במערכת: 4 פלטות של 5 קילוגרם, 4 פלטות של 2.5 קילוגרם, 6 פלטות של 1.25 קילוגרם, ו-6 פלטות של 0.5 קילוגרם. בחרו את סוג המוט ואת משקל היעד, והמחשבון יציג אילו פלטות להרכיב בכל צד.
-                </Text>
-
-                <View style={[styles.statsGrid, isWide && styles.statsGridWide]}>
-                  {(
-                    [
-                      {
-                        id: 'pair',
-                        title: 'שתי משקולות יד שוות',
-                        sub: 'שני המוטות הקצרים | עד 20.5 קילוגרם בכל יד',
-                      },
-                      {
-                        id: 'single',
-                        title: 'משקולת יד אחת כבדה',
-                        sub: 'מוט קצר אחד | עד 34.5 קילוגרם (לתרגיל חתירה)',
-                      },
-                      {
-                        id: 'barbell',
-                        title: 'המוט הארוך (152 סנטימטר)',
-                        sub: 'המוט שמתחבר משני חלקים | עד 46.5 קילוגרם',
-                      },
-                    ] as { id: EquipmentMode; title: string; sub: string }[]
-                  ).map((m) => {
-                    const active = calcMode === m.id;
-                    return (
-                      <Pressable
-                        key={m.id}
-                        onPress={() => {
-                          setCalcMode(m.id);
-                          setCalcIdx(6);
-                        }}
-                        style={[
-                          styles.subCard,
-                          {
-                            flex: 1,
-                            backgroundColor: active ? colors.primary : colors.background,
-                            borderColor: active ? colors.primary : colors.border,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.subCardTitle,
-                            {
-                              color: active ? colors.primaryForeground : colors.foreground,
-                              fontFamily: fBold,
-                            },
-                          ]}
-                        >
-                          {m.title}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.subCardText,
-                            {
-                              color: active ? colors.primaryForeground : colors.mutedForeground,
-                              opacity: active ? 0.9 : 1,
-                              fontFamily: fReg,
-                            },
-                          ]}
-                        >
-                          {m.sub}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <View
-                  style={[
-                    styles.subCard,
-                    { backgroundColor: colors.background, borderColor: colors.border, gap: 12 },
-                  ]}
-                >
-                  <View style={styles.rowBetween}>
-                    <Text
-                      style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fSemi }]}
-                    >
-                      בחר משקל רצוי (כולל משקל המוט עצמו):
-                    </Text>
-                    <View style={styles.stepperGroup}>
-                      <Pressable
-                        onPress={() => setCalcIdx((i) => Math.max(0, i - 1))}
-                        style={[
-                          styles.stepperBtn,
-                          { backgroundColor: colors.card, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.stepperBtnText,
-                            { color: colors.foreground, fontFamily: fBold },
-                          ]}
-                        >
-                          −
-                        </Text>
-                      </Pressable>
-                      <Text
-                        style={[styles.calcBigWeight, { color: colors.primary, fontFamily: fBold }]}
-                      >
-                        {activeCalcCfg.totalWeight}{' '}
-                        {calcMode === 'pair' ? 'קילוגרם בכל יד' : 'קילוגרם בסך הכל'}
-                      </Text>
-                      <Pressable
-                        onPress={() =>
-                          setCalcIdx((i) => Math.min(calcConfigs.length - 1, i + 1))
-                        }
-                        style={[
-                          styles.stepperBtn,
-                          { backgroundColor: colors.card, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.stepperBtnText,
-                            { color: colors.foreground, fontFamily: fBold },
-                          ]}
-                        >
-                          +
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-
-                  <View style={styles.filterRow}>
-                    {calcConfigs.map((c, i) => {
-                      const active = i === safeCalcIdx;
-                      return (
-                        <Pressable
-                          key={c.totalWeight}
-                          onPress={() => setCalcIdx(i)}
-                          style={[
-                            styles.filterChip,
-                            {
-                              backgroundColor: active ? colors.primary : colors.card,
-                              borderColor: active ? colors.primary : colors.border,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.smallBtnText,
-                              {
-                                color: active ? colors.primaryForeground : colors.foreground,
-                                fontFamily: fMed,
-                              },
-                            ]}
-                          >
-                            {c.totalWeight}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                <View style={[styles.twoColGrid, isWide && styles.twoColGridWide]}>
-                  <View
-                    style={[
-                      styles.subCard,
-                      {
-                        flex: 1,
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                        gap: 10,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                    >
-                      אילו פלטות להשחיל בכל צד של המוט:
-                    </Text>
-                    {activeCalcCfg.totalPlatesSide === 0 ? (
-                      <Text
-                        style={[
-                          styles.subCardText,
-                          { color: colors.mutedForeground, fontFamily: fReg },
-                        ]}
-                      >
-                        מוט ריק עם סוגרים בלבד (שוקל בערך {activeCalcCfg.barWeight} קילוגרם).
-                      </Text>
-                    ) : (
-                      <View style={{ gap: 8 }}>
-                        {[
-                          { count: activeCalcCfg.c5, label: 'פלטה של 5 קילוגרם' },
-                          { count: activeCalcCfg.c25, label: 'פלטה של 2.5 קילוגרם' },
-                          { count: activeCalcCfg.c125, label: 'פלטה של 1.25 קילוגרם' },
-                          { count: activeCalcCfg.c05, label: 'פלטה של 0.5 קילוגרם' },
-                        ]
-                          .filter((p) => p.count > 0)
-                          .map((p) => (
-                            <View
-                              key={p.label}
-                              style={[
-                                styles.plateRow,
-                                { backgroundColor: colors.card, borderColor: colors.border },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.subCardText,
-                                  { color: colors.foreground, fontFamily: fSemi },
-                                ]}
-                              >
-                                {p.label}
-                              </Text>
-                              <View style={[styles.pillBadge, { backgroundColor: colors.secondary }]}>
-                                <Text
-                                  style={[
-                                    styles.pillBadgeText,
-                                    { color: colors.secondaryForeground, fontFamily: fBold },
-                                  ]}
-                                >
-                                  {p.count} בכל צד של המוט
-                                </Text>
-                              </View>
-                            </View>
-                          ))}
-                      </View>
-                    )}
-
-                    <Text
-                      style={[
-                        styles.subCardText,
-                        {
-                          color: colors.mutedForeground,
-                          fontFamily: fReg,
-                          borderTopWidth: 1,
-                          borderTopColor: colors.border,
-                          paddingTop: 8,
-                        },
-                      ]}
-                    >
-                      {(() => {
-                        const mult = calcMode === 'pair' ? 4 : 2;
-                        return `כמה פלטות לקחנו בסך הכל מתוך הארגז: ${
-                          activeCalcCfg.c5 * mult
-                        } מתוך 4 של 5 קילוגרם • ${
-                          activeCalcCfg.c25 * mult
-                        } מתוך 4 של 2.5 קילוגרם • ${
-                          activeCalcCfg.c125 * mult
-                        } מתוך 6 של 1.25 קילוגרם • ${
-                          activeCalcCfg.c05 * mult
-                        } מתוך 6 של 0.5 קילוגרם.`;
-                      })()}
-                    </Text>
-                  </View>
-
-                  {/* Visual Sleeve */}
-                  <View
-                    style={[
-                      styles.subCard,
-                      {
-                        flex: 1,
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        minHeight: 160,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.subCardText,
-                        {
-                          color: colors.mutedForeground,
-                          fontFamily: fReg,
-                          marginBottom: 14,
-                          textAlign: 'center',
-                        },
-                      ]}
-                    >
-                      כך נראה צד אחד של המוט (הפלטות הגדולות בפנים והקטנות בחוץ)
-                    </Text>
-                    <View style={styles.sleeveVisualRow}>
-                      <View style={[styles.barGrip, { backgroundColor: colors.mutedForeground }]} />
-                      <View style={[styles.barStopper, { backgroundColor: colors.foreground }]} />
-                      <View style={styles.platesStackRow}>
-                        {[
-                          { count: activeCalcCfg.c5, h: 92, w: 20 },
-                          { count: activeCalcCfg.c25, h: 74, w: 16 },
-                          { count: activeCalcCfg.c125, h: 58, w: 13 },
-                          { count: activeCalcCfg.c05, h: 44, w: 10 },
-                        ].map((pl, gIdx) =>
-                          Array.from({ length: pl.count }, (_, k) => (
-                            <View
-                              key={`${gIdx}-${k}`}
-                              style={{
-                                height: pl.h,
-                                width: pl.w,
-                                borderRadius: 4,
-                                backgroundColor: colors.primary,
-                                marginHorizontal: 1.5,
-                              }}
-                            />
-                          ))
-                        )}
-                      </View>
-                      <View
-                        style={[
-                          styles.spinlockCollar,
-                          { backgroundColor: colors.secondary, borderColor: colors.border },
-                        ]}
-                      />
-                      <View
-                        style={[styles.barOuterEnd, { backgroundColor: colors.mutedForeground }]}
-                      />
-                    </View>
-                  </View>
                 </View>
               </View>
             )}
@@ -4622,53 +4286,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: 'right',
     writingDirection: 'rtl',
-  },
-  calcBigWeight: {
-    fontSize: 18,
-    paddingHorizontal: 8,
-  },
-  plateRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  sleeveVisualRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  barGrip: {
-    width: 58,
-    height: 14,
-    opacity: 0.45,
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
-  },
-  barStopper: {
-    width: 10,
-    height: 32,
-    borderRadius: 2,
-  },
-  platesStackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 2,
-  },
-  spinlockCollar: {
-    width: 14,
-    height: 28,
-    borderWidth: 1,
-    borderRadius: 3,
-  },
-  barOuterEnd: {
-    width: 44,
-    height: 12,
-    opacity: 0.35,
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
   },
   gifPickerGrid: {
     flexDirection: 'row-reverse',

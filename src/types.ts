@@ -19,7 +19,7 @@ export interface ThemeColors {
 
 export type EquipmentMode = 'pair' | 'single' | 'barbell' | 'platePair' | 'bodyweight';
 
-export type WorkoutTabKey = 'workoutA' | 'workoutB' | 'progress' | 'all' | 'calculator';
+export type WorkoutTabKey = 'workoutA' | 'workoutB' | 'progress' | 'all';
 
 export interface ExerciseVideo {
   label: string;
