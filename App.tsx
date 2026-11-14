@@ -1099,7 +1099,7 @@ export default function App(): React.ReactElement {
                     size={34}
                     active
                     borderColor={colors.border}
-                    activeBorderColor="#a3e635"
+                    activeBorderColor={colors.primary}
                   />
                   <View
                     style={[
@@ -1757,13 +1757,6 @@ export default function App(): React.ReactElement {
                   {isWide ? (
                     <View style={[styles.exHeaderCompact, { borderBottomColor: colors.border }]}>
                       <View style={styles.exHeaderTitleGroup}>
-                        <ExerciseGifIcon
-                          exerciseId={ex.id}
-                          size={46}
-                          active
-                          borderColor={colors.border}
-                          activeBorderColor="#a3e635"
-                        />
                         <View style={{ flex: 1, gap: 2 }}>
                           <Text
                             numberOfLines={1}
@@ -1840,13 +1833,6 @@ export default function App(): React.ReactElement {
                             },
                           ]}
                         >
-                          <ExerciseGifIcon
-                            exerciseId={ex.id}
-                            size={34}
-                            active
-                            borderColor={colors.border}
-                            activeBorderColor="#a3e635"
-                          />
                           <View
                             style={[
                               styles.dropdownCountBadge,
@@ -2076,7 +2062,7 @@ export default function App(): React.ReactElement {
                             size={60}
                             active={active}
                             borderColor={colors.border}
-                            activeBorderColor="#a3e635"
+                            activeBorderColor={colors.primary}
                           />
                           <Text
                             numberOfLines={1}
@@ -2719,7 +2705,7 @@ export default function App(): React.ReactElement {
                         size={52}
                         active={isCur}
                         borderColor={colors.border}
-                        activeBorderColor="#a3e635"
+                        activeBorderColor={colors.primary}
                       />
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text
@@ -2999,7 +2985,7 @@ export default function App(): React.ReactElement {
                       size={44}
                       active
                       borderColor={colors.border}
-                      activeBorderColor="#a3e635"
+                      activeBorderColor={colors.primary}
                     />
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text

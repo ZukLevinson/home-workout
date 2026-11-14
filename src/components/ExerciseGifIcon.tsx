@@ -27,7 +27,7 @@ export default function ExerciseGifIcon({
   size = 60,
   active = false,
   borderColor = '#1e293b',
-  activeBorderColor = '#a3e635',
+  activeBorderColor = '#3b82f6',
 }: ExerciseGifIconProps): React.ReactElement | null {
   const source = EXERCISE_GIF_MAP[exerciseId];
   if (!source) return null;
@@ -62,7 +62,7 @@ export default function ExerciseGifIcon({
 
 const styles = StyleSheet.create({
   frame: {
-    backgroundColor: '#080b12',
+    backgroundColor: '#0b1120',
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
