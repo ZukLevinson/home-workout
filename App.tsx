@@ -1318,7 +1318,7 @@ export default function App(): React.ReactElement {
                     )}
                   </View>
 
-                  {/* Active Set Controls Card (Weight + Reps + Mark Done) */}
+                  {/* Active Set Controls Card (Separated Weight & Reps Sub-Cards + Quick Strip + Mark Done CTA) */}
                   <View
                     style={[
                       styles.activeSetControlBox,
@@ -1329,156 +1329,194 @@ export default function App(): React.ReactElement {
                       },
                     ]}
                   >
-                    <View style={styles.setControlsMainRow}>
-                      {/* Weight Stepper */}
-                      <View style={styles.stepperGroup}>
-                        <Pressable
-                          disabled={atMin}
-                          onPress={() => stepSupportedWeight(ex, setNum, -1)}
-                          style={[
-                            styles.stepperBtn,
-                            {
-                              backgroundColor: colors.card,
-                              borderColor: colors.border,
-                              opacity: atMin ? 0.35 : 1,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.stepperBtnText,
-                              { color: colors.foreground, fontFamily: fBold },
-                            ]}
-                          >
-                            −
-                          </Text>
-                        </Pressable>
-
-                        <View
-                          style={[
-                            styles.weightDisplayPill,
-                            { backgroundColor: colors.card, borderColor: colors.primary },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.smallBtnText,
-                              { color: colors.foreground, fontFamily: fBold },
-                            ]}
-                          >
-                            {entry.weight === 0 ? 'משקל גוף (0)' : `${entry.weight} קילוגרם`}
-                          </Text>
-                        </View>
-
-                        <Pressable
-                          disabled={atMax}
-                          onPress={() => stepSupportedWeight(ex, setNum, 1)}
-                          style={[
-                            styles.stepperBtn,
-                            {
-                              backgroundColor: colors.card,
-                              borderColor: colors.border,
-                              opacity: atMax ? 0.35 : 1,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.stepperBtnText,
-                              { color: colors.foreground, fontFamily: fBold },
-                            ]}
-                          >
-                            +
-                          </Text>
-                        </Pressable>
-                      </View>
-
-                      {/* Reps Stepper */}
-                      <View style={styles.stepperGroup}>
-                        <Pressable
-                          onPress={() => stepReps(ex, setNum, -1)}
-                          style={[
-                            styles.stepperBtn,
-                            { backgroundColor: colors.card, borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.stepperBtnText,
-                              { color: colors.foreground, fontFamily: fBold },
-                            ]}
-                          >
-                            −
-                          </Text>
-                        </Pressable>
-                        <TextInput
-                          value={String(entry.reps)}
-                          onChangeText={(txt) => updateRepsText(ex, setNum, txt)}
-                          keyboardType="number-pad"
-                          style={[
-                            styles.stepperInputSmall,
-                            {
-                              backgroundColor: colors.card,
-                              borderColor: colors.border,
-                              color: colors.foreground,
-                              fontFamily: fBold,
-                            },
-                          ]}
-                        />
-                        <Pressable
-                          onPress={() => stepReps(ex, setNum, 1)}
-                          style={[
-                            styles.stepperBtn,
-                            { backgroundColor: colors.card, borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.stepperBtnText,
-                              { color: colors.foreground, fontFamily: fBold },
-                            ]}
-                          >
-                            +
-                          </Text>
-                        </Pressable>
-                        <Text
-                          style={[
-                            styles.unitLabel,
-                            { color: colors.mutedForeground, fontFamily: fReg },
-                          ]}
-                        >
-                          חזרות
-                        </Text>
-                      </View>
-
-                      {/* Mark Set Done Button */}
-                      <Pressable
-                        onPress={() => toggleSetDone(ex, setNum)}
+                    {/* Row 1: Two Distinct Sub-Cards for Weight and Reps */}
+                    <View style={styles.controlsSplitRow}>
+                      {/* Weight Sub-Card */}
+                      <View
                         style={[
-                          styles.doneBtnCompact,
+                          styles.metricSubCard,
+                          styles.weightMetricSubCard,
                           {
-                            backgroundColor: entry.done ? colors.successSoft : colors.primary,
-                            borderColor: entry.done ? colors.success : colors.primary,
+                            backgroundColor: colors.card,
+                            borderColor: exConfigs.length > 1 ? colors.primarySoft : colors.border,
                           },
                         ]}
                       >
-                        <Text
-                          style={[
-                            styles.smallBtnText,
-                            {
-                              color: entry.done ? colors.success : colors.primaryForeground,
-                              fontFamily: fBold,
-                            },
-                          ]}
-                        >
-                          {entry.done ? `סט ${setNum} בוצע ✓` : `סמן סט ${setNum} כבוצע ✓`}
-                        </Text>
-                      </Pressable>
+                        <View style={styles.metricSubHeader}>
+                          <Text
+                            style={[
+                              styles.metricSubLabel,
+                              { color: colors.mutedForeground, fontFamily: fSemi },
+                            ]}
+                          >
+                            🏋️ משקל
+                          </Text>
+                          {effectiveSets > 1 && exConfigs.length > 1 && (
+                            <Pressable
+                              onPress={() => selectWeightForExercise(ex, entry.weight)}
+                              style={[
+                                styles.applyAllInlinePill,
+                                {
+                                  backgroundColor: colors.primarySoft,
+                                  borderColor: colors.primary,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.applyAllInlineText,
+                                  { color: colors.primary, fontFamily: fBold },
+                                ]}
+                              >
+                                לכל הסטים ↻
+                              </Text>
+                            </Pressable>
+                          )}
+                        </View>
+
+                        <View style={styles.metricStepperRow}>
+                          <Pressable
+                            disabled={atMin}
+                            onPress={() => stepSupportedWeight(ex, setNum, -1)}
+                            style={[
+                              styles.metricStepperBtn,
+                              {
+                                backgroundColor: colors.background,
+                                borderColor: colors.border,
+                                opacity: atMin ? 0.35 : 1,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.stepperBtnText,
+                                { color: colors.foreground, fontFamily: fBold },
+                              ]}
+                            >
+                              −
+                            </Text>
+                          </Pressable>
+
+                          <View style={styles.metricValueCenter}>
+                            <Text
+                              numberOfLines={1}
+                              style={[
+                                styles.metricValueBig,
+                                { color: colors.foreground, fontFamily: fBold },
+                              ]}
+                            >
+                              {entry.weight === 0 ? 'גוף' : `${entry.weight}`}
+                            </Text>
+                            <Text
+                              numberOfLines={1}
+                              style={[
+                                styles.metricValueUnit,
+                                { color: colors.mutedForeground, fontFamily: fMed },
+                              ]}
+                            >
+                              {entry.weight === 0 ? 'ללא משקולת' : 'קילוגרם'}
+                            </Text>
+                          </View>
+
+                          <Pressable
+                            disabled={atMax}
+                            onPress={() => stepSupportedWeight(ex, setNum, 1)}
+                            style={[
+                              styles.metricStepperBtn,
+                              {
+                                backgroundColor: colors.background,
+                                borderColor: colors.border,
+                                opacity: atMax ? 0.35 : 1,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.stepperBtnText,
+                                { color: colors.foreground, fontFamily: fBold },
+                              ]}
+                            >
+                              +
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+
+                      {/* Reps Sub-Card */}
+                      <View
+                        style={[
+                          styles.metricSubCard,
+                          styles.repsMetricSubCard,
+                          { backgroundColor: colors.card, borderColor: colors.border },
+                        ]}
+                      >
+                        <View style={[styles.metricSubHeader, { justifyContent: 'center' }]}>
+                          <Text
+                            style={[
+                              styles.metricSubLabel,
+                              { color: colors.mutedForeground, fontFamily: fSemi },
+                            ]}
+                          >
+                            🔁 חזרות
+                          </Text>
+                        </View>
+
+                        <View style={styles.metricStepperRow}>
+                          <Pressable
+                            onPress={() => stepReps(ex, setNum, -1)}
+                            style={[
+                              styles.metricStepperBtn,
+                              { backgroundColor: colors.background, borderColor: colors.border },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.stepperBtnText,
+                                { color: colors.foreground, fontFamily: fBold },
+                              ]}
+                            >
+                              −
+                            </Text>
+                          </Pressable>
+
+                          <TextInput
+                            value={String(entry.reps)}
+                            onChangeText={(txt) => updateRepsText(ex, setNum, txt)}
+                            keyboardType="number-pad"
+                            style={[
+                              styles.metricRepsInput,
+                              {
+                                backgroundColor: colors.background,
+                                borderColor: colors.border,
+                                color: colors.foreground,
+                                fontFamily: fBold,
+                              },
+                            ]}
+                          />
+
+                          <Pressable
+                            onPress={() => stepReps(ex, setNum, 1)}
+                            style={[
+                              styles.metricStepperBtn,
+                              { backgroundColor: colors.background, borderColor: colors.border },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.stepperBtnText,
+                                { color: colors.foreground, fontFamily: fBold },
+                              ]}
+                            >
+                              +
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
                     </View>
 
-                    {/* Closest Supported Kilograms Quick Strip + More + Copy-All */}
-                    <View style={styles.chipsInlineBar}>
-                      {(() => {
+                    {/* Row 2: Closest Supported Kilograms Quick Strip + More Weights Modal */}
+                    {exConfigs.length > 1 &&
+                      (() => {
                         const anchorIdx =
                           curCfgIdx >= 0
                             ? curCfgIdx
@@ -1497,7 +1535,7 @@ export default function App(): React.ReactElement {
                           : exConfigs;
 
                         return (
-                          <View style={styles.quickWeightsRow}>
+                          <View style={styles.quickWeightsStrip}>
                             {visibleConfigs.map((cfg) => {
                               const selected = cfg.totalWeight === entry.weight;
                               return (
@@ -1505,7 +1543,7 @@ export default function App(): React.ReactElement {
                                   key={cfg.totalWeight}
                                   onPress={() => selectWeightForSet(ex, setNum, cfg.totalWeight)}
                                   style={[
-                                    styles.weightOptionChipCompact,
+                                    styles.weightOptionChipSegmented,
                                     {
                                       backgroundColor: selected ? colors.primary : colors.card,
                                       borderColor: selected ? colors.primary : colors.border,
@@ -1513,6 +1551,7 @@ export default function App(): React.ReactElement {
                                   ]}
                                 >
                                   <Text
+                                    numberOfLines={1}
                                     style={[
                                       styles.smallBtnText,
                                       {
@@ -1523,7 +1562,7 @@ export default function App(): React.ReactElement {
                                       },
                                     ]}
                                   >
-                                    {cfg.totalWeight === 0 ? '0 (גוף)' : `${cfg.totalWeight}`}
+                                    {cfg.totalWeight === 0 ? '0' : `${cfg.totalWeight}`}
                                   </Text>
                                 </Pressable>
                               );
@@ -1532,7 +1571,7 @@ export default function App(): React.ReactElement {
                               <Pressable
                                 onPress={() => setWeightsModalOpen(true)}
                                 style={[
-                                  styles.moreWeightsChip,
+                                  styles.moreWeightsChipSegmented,
                                   {
                                     backgroundColor: colors.primarySoft,
                                     borderColor: colors.primary,
@@ -1540,6 +1579,7 @@ export default function App(): React.ReactElement {
                                 ]}
                               >
                                 <Text
+                                  numberOfLines={1}
                                   style={[
                                     styles.smallBtnText,
                                     { color: colors.primary, fontFamily: fBold },
@@ -1553,25 +1593,29 @@ export default function App(): React.ReactElement {
                         );
                       })()}
 
-                      {effectiveSets > 1 && (
-                        <Pressable
-                          onPress={() => selectWeightForExercise(ex, entry.weight)}
-                          style={[
-                            styles.copyAllSetsBtn,
-                            { backgroundColor: colors.card, borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.copyAllSetsText,
-                              { color: colors.primary, fontFamily: fSemi },
-                            ]}
-                          >
-                            לכל הסטים
-                          </Text>
-                        </Pressable>
-                      )}
-                    </View>
+                    {/* Row 3: Full-Width Set Completion CTA */}
+                    <Pressable
+                      onPress={() => toggleSetDone(ex, setNum)}
+                      style={[
+                        styles.doneBtnFull,
+                        {
+                          backgroundColor: entry.done ? colors.successSoft : colors.primary,
+                          borderColor: entry.done ? colors.success : colors.primary,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.doneBtnFullText,
+                          {
+                            color: entry.done ? colors.success : colors.primaryForeground,
+                            fontFamily: fBold,
+                          },
+                        ]}
+                      >
+                        {entry.done ? `✓ סט ${setNum} בוצע (לחץ לביטול)` : `סמן סט ${setNum} כבוצע ✓`}
+                      </Text>
+                    </Pressable>
                   </View>
 
                   {/* Live Movement Animation + Weight Assembly Together */}
@@ -5107,5 +5151,118 @@ const styles = StyleSheet.create({
   bottomStatPillMobile: {
     paddingHorizontal: 7,
     paddingVertical: 4,
+  },
+  controlsSplitRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  metricSubCard: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  weightMetricSubCard: {
+    flex: 1.35,
+  },
+  repsMetricSubCard: {
+    flex: 1,
+  },
+  metricSubHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  metricSubLabel: {
+    fontSize: 10.5,
+    writingDirection: 'rtl',
+  },
+  applyAllInlinePill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  applyAllInlineText: {
+    fontSize: 10,
+    writingDirection: 'rtl',
+  },
+  metricStepperRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  metricStepperBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricValueCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricValueBig: {
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  metricValueUnit: {
+    fontSize: 9.5,
+    lineHeight: 11,
+    writingDirection: 'rtl',
+  },
+  metricRepsInput: {
+    flex: 1,
+    minWidth: 34,
+    maxWidth: 52,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    textAlign: 'center',
+    fontSize: 14,
+    paddingVertical: 2,
+  },
+  quickWeightsStrip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 5,
+    width: '100%',
+  },
+  weightOptionChipSegmented: {
+    flex: 1,
+    paddingHorizontal: 4,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreWeightsChipSegmented: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneBtnFull: {
+    width: '100%',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneBtnFullText: {
+    fontSize: 12.5,
+    writingDirection: 'rtl',
   },
 });
