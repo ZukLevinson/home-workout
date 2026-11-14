@@ -10,6 +10,7 @@ import {
   Share,
   Platform,
   SafeAreaView,
+  Modal,
   useColorScheme,
   useWindowDimensions,
 } from 'react-native';
@@ -37,6 +38,7 @@ import {
 } from './src/data/exercises';
 import ExerciseAnimation from './src/components/ExerciseAnimation';
 import EquipmentBuildDiagram from './src/components/EquipmentBuildDiagram';
+import ExerciseTrendCard from './src/components/ExerciseTrendCard';
 import ProgressChart from './src/components/ProgressChart';
 import { isFirebaseConfigured } from './src/firebaseConfig';
 import {
@@ -79,9 +81,13 @@ export default function App() {
 
   // Navigation & UI state
   const [currentTab, setCurrentTab] = useState('workoutA');
-  const [guideOpen, setGuideOpen] = useState(false);
+  const [currentExerciseIdx, setCurrentExerciseIdx] = useState(0);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [stepsExpanded, setStepsExpanded] = useState(true);
   const [muscleFilter, setMuscleFilter] = useState('all');
   const [animPaused, setAnimPaused] = useState(false);
+  const exerciseScrollRef = useRef(null);
 
   // Optional per-exercise mode override (e.g. ex1 Floor Press can toggle pair <-> barbell)
   const [exModeOverrides, setExModeOverrides] = useState({});
@@ -615,264 +621,427 @@ export default function App() {
     { key: 'calculator', label: '🔩 מחשבון פלטות' },
   ];
 
+  const isWorkoutTab = currentTab !== 'progress' && currentTab !== 'calculator';
+  const safeExIdx =
+    visibleExercises.length > 0 ? Math.min(currentExerciseIdx, visibleExercises.length - 1) : 0;
+  const activeEx = isWorkoutTab ? visibleExercises[safeExIdx] || null : null;
+
+  const goToExercise = (nextIdx) => {
+    if (visibleExercises.length === 0) return;
+    const clamped = Math.max(0, Math.min(visibleExercises.length - 1, nextIdx));
+    setCurrentExerciseIdx(clamped);
+    if (exerciseScrollRef.current && typeof exerciseScrollRef.current.scrollTo === 'function') {
+      exerciseScrollRef.current.scrollTo({ y: 0, animated: false });
+    }
+  };
+
+  // Helper returning completion ratio for an exercise dot/pill
+  const getExerciseDoneStats = (ex) => {
+    const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
+    let doneCount = 0;
+    let bestWeightToday = 0;
+    for (let s = 1; s <= effectiveSets; s++) {
+      const entry = getSetEntry(ex, s);
+      if (entry.done) doneCount++;
+      if (s === 1 || entry.weight > bestWeightToday) bestWeightToday = entry.weight;
+    }
+    return {
+      doneCount,
+      effectiveSets,
+      allDone: effectiveSets > 0 && doneCount === effectiveSets,
+      bestWeightToday,
+    };
+  };
+
   return (
-    <SafeAreaView style={[styles.safeRoot, { backgroundColor: colors.background }]}>
+    <SafeAreaView
+      style={[
+        styles.safeRoot,
+        Platform.OS === 'web' ? styles.webFullscreenRoot : null,
+        { backgroundColor: colors.background },
+      ]}
+    >
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.maxWidthWrap}>
-          {/* HEADER + REST TIMER */}
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={[styles.headerRow, isWide && styles.headerRowWide]}>
-              <View style={styles.headerTextCol}>
-                <View style={styles.badgesWrap}>
-                  <View style={[styles.pillBadge, { backgroundColor: colors.secondary }]}>
-                    <Text
-                      style={[
-                        styles.pillBadgeText,
-                        { color: colors.secondaryForeground, fontFamily: fMed },
-                      ]}
-                    >
-                      הדגמה חיה + סרטונים • מותאם לפלטות שלך בלבד • ללא קיצורים
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.pillBadge,
-                      {
-                        backgroundColor:
-                          syncStatus.mode === 'cloud' ? colors.successSoft : colors.secondary,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pillBadgeText,
-                        {
-                          color:
-                            syncStatus.mode === 'cloud' ? colors.success : colors.mutedForeground,
-                          fontFamily: fSemi,
-                        },
-                      ]}
-                    >
-                      ☁️ {syncStatus.message}
-                    </Text>
-                  </View>
-                </View>
 
-                <Text style={[styles.appTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  תכנית אימונים ביתית לפלג גוף עליון
-                </Text>
-                <Text
-                  style={[
-                    styles.appSubtitle,
-                    { color: colors.mutedForeground, fontFamily: fReg },
-                  ]}
-                >
-                  מותאמת לערכה שלך ולספסל העץ של איקאה{' '}
-                  <Text style={{ color: colors.foreground, fontFamily: fSemi }}>STOREDAMM</Text>. כל משקל שתבחר באתר מחושב אך ורק מהפלטות והמוטות שיש לך בארגז!
-                </Text>
-
-                {Platform.OS === 'web' &&
-                  isFirebaseConfigured() &&
-                  (!firebaseUser || firebaseUser.isAnonymous) && (
-                    <Pressable
-                      onPress={handleGoogleSignIn}
-                      style={[
-                        styles.googleSyncBtn,
-                        { backgroundColor: colors.background, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.googleSyncBtnText,
-                          { color: colors.primary, fontFamily: fSemi },
-                        ]}
-                      >
-                        🔗 התחבר עם Google כדי לסנכרן בין האייפון למחשב
-                      </Text>
-                    </Pressable>
-                  )}
-              </View>
-
-              {/* Rest Timer Box */}
+      {/* PINNED COMPACT TOP BAR (Header, Rest Timer, Tabs, Exercise Stepper) */}
+      <View
+        style={[
+          styles.topShell,
+          { backgroundColor: colors.card, borderBottomColor: colors.border },
+        ]}
+      >
+        {/* Row 1: Compact Title + Sync + Rest Timer + Guide Modal Trigger */}
+        <View style={styles.topRow1}>
+          <View style={styles.topBrandCol}>
+            <View style={styles.topBrandTitleRow}>
+              <Text
+                numberOfLines={1}
+                style={[styles.compactTitle, { color: colors.foreground, fontFamily: fBold }]}
+              >
+                🏋️ תכנית אימונים ביתית
+              </Text>
               <View
                 style={[
-                  styles.timerBox,
+                  styles.compactSyncBadge,
+                  {
+                    backgroundColor:
+                      syncStatus.mode === 'cloud' ? colors.successSoft : colors.secondary,
+                  },
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.compactSyncText,
+                    {
+                      color:
+                        syncStatus.mode === 'cloud' ? colors.success : colors.mutedForeground,
+                      fontFamily: fSemi,
+                    },
+                  ]}
+                >
+                  ☁️ {syncStatus.message}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.topUtilityRow}>
+              <Pressable
+                onPress={() => setGuideModalOpen(true)}
+                style={[
+                  styles.utilityBtn,
+                  { backgroundColor: colors.secondary, borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.utilityBtnText,
+                    { color: colors.secondaryForeground, fontFamily: fSemi },
+                  ]}
+                >
+                  📖 מדריך, לוח שבועי וציוד
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setAnimPaused((p) => !p)}
+                style={[
+                  styles.utilityBtn,
                   { backgroundColor: colors.background, borderColor: colors.border },
                 ]}
               >
-                <View style={styles.timerReadoutCol}>
-                  <Text
-                    style={[styles.timerLabel, { color: colors.mutedForeground, fontFamily: fReg }]}
-                  >
-                    שעון מנוחה בין סטים
-                  </Text>
-                  <Text
-                    style={[
-                      styles.timerValue,
-                      {
-                        color: timerFinished ? colors.success : colors.foreground,
-                        fontFamily: fBold,
-                      },
-                    ]}
-                  >
-                    {timerFinished ? 'אפשר להמשיך! 💪' : formatTime(timerSeconds)}
-                  </Text>
-                </View>
-                <View style={styles.timerButtonsCol}>
-                  <View style={styles.timerPresetRow}>
-                    <Pressable
-                      onPress={() => startTimer(60)}
-                      style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
-                    >
-                      <Text
-                        style={[
-                          styles.smallBtnText,
-                          { color: colors.secondaryForeground, fontFamily: fMed },
-                        ]}
-                      >
-                        60 שניות
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => startTimer(90)}
-                      style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
-                    >
-                      <Text
-                        style={[
-                          styles.smallBtnText,
-                          { color: colors.secondaryForeground, fontFamily: fMed },
-                        ]}
-                      >
-                        90 שניות
-                      </Text>
-                    </Pressable>
-                  </View>
+                <Text
+                  style={[styles.utilityBtnText, { color: colors.foreground, fontFamily: fMed }]}
+                >
+                  {animPaused ? '▶ הפעל אנימציה' : '⏸ השהה אנימציה'}
+                </Text>
+              </Pressable>
+
+              {Platform.OS === 'web' &&
+                isFirebaseConfigured() &&
+                (!firebaseUser || firebaseUser.isAnonymous) && (
                   <Pressable
-                    onPress={toggleTimer}
-                    style={[styles.primarySmallBtn, { backgroundColor: colors.primary }]}
+                    onPress={handleGoogleSignIn}
+                    style={[
+                      styles.utilityBtn,
+                      { backgroundColor: colors.background, borderColor: colors.primary },
+                    ]}
                   >
                     <Text
                       style={[
-                        styles.smallBtnText,
-                        { color: colors.primaryForeground, fontFamily: fSemi },
+                        styles.utilityBtnText,
+                        { color: colors.primary, fontFamily: fSemi },
                       ]}
                     >
-                      {timerRunning ? 'עצור שעון' : 'הפעל שעון'}
+                      🔗 התחבר עם Google
                     </Text>
                   </Pressable>
-                </View>
-              </View>
-            </View>
-
-            {/* MY HOME EQUIPMENT INVENTORY STRIP */}
-            <View
-              style={[
-                styles.inventoryStrip,
-                { backgroundColor: colors.background, borderColor: colors.border },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.inventoryTitle,
-                  { color: colors.foreground, fontFamily: fBold },
-                ]}
-              >
-                📦 תכולת ארגז המשקולות שלך (האתר מאפשר לבחור אך ורק משקלים שניתן להרכיב מהרשימה הזו):
-              </Text>
-              <View style={styles.filterRow}>
-                {EQUIPMENT_SUMMARY_ITEMS.map((item) => (
-                  <View
-                    key={item}
-                    style={[
-                      styles.inventoryChip,
-                      { backgroundColor: colors.card, borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pillBadgeText,
-                        { color: colors.foreground, fontFamily: fMed },
-                      ]}
-                    >
-                      • {item}
-                    </Text>
-                  </View>
-                ))}
-              </View>
+                )}
             </View>
           </View>
 
-          {/* COLLAPSIBLE BEGINNER GUIDE + SAFETY + SCHEDULE */}
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Pressable onPress={() => setGuideOpen((o) => !o)} style={styles.accordionHeader}>
-              <Text style={[styles.accordionTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                📖 מדריך מהיר למתחילים, בטיחות בספסל איקאה ולוח שבועי מומלץ
+          {/* Compact Inline Rest Timer */}
+          <View
+            style={[
+              styles.compactTimerBox,
+              { backgroundColor: colors.background, borderColor: colors.border },
+            ]}
+          >
+            <Text
+              style={[
+                styles.compactTimerVal,
+                {
+                  color: timerFinished ? colors.success : colors.foreground,
+                  fontFamily: fBold,
+                },
+              ]}
+            >
+              {timerFinished ? 'המשך! 💪' : `⏱ ${formatTime(timerSeconds)}`}
+            </Text>
+            <Pressable
+              onPress={() => startTimer(60)}
+              style={[styles.miniTimerBtn, { backgroundColor: colors.secondary }]}
+            >
+              <Text
+                style={[
+                  styles.miniTimerBtnText,
+                  { color: colors.secondaryForeground, fontFamily: fMed },
+                ]}
+              >
+                60 שניות
               </Text>
-              <View style={[styles.smallBtn, { backgroundColor: colors.secondary }]}>
+            </Pressable>
+            <Pressable
+              onPress={() => startTimer(90)}
+              style={[styles.miniTimerBtn, { backgroundColor: colors.secondary }]}
+            >
+              <Text
+                style={[
+                  styles.miniTimerBtnText,
+                  { color: colors.secondaryForeground, fontFamily: fMed },
+                ]}
+              >
+                90 שניות
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={toggleTimer}
+              style={[styles.miniTimerBtn, { backgroundColor: colors.primary }]}
+            >
+              <Text
+                style={[
+                  styles.miniTimerBtnText,
+                  { color: colors.primaryForeground, fontFamily: fBold },
+                ]}
+              >
+                {timerRunning ? 'עצור' : 'הפעל'}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Row 2: Horizontal Navigation Tabs */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.topTabsScroll}
+        >
+          {navTabs.map((t) => {
+            const active = currentTab === t.key;
+            return (
+              <Pressable
+                key={t.key}
+                onPress={() => {
+                  setSaveFeedback(null);
+                  setCurrentTab(t.key);
+                  setCurrentExerciseIdx(0);
+                  if (
+                    exerciseScrollRef.current &&
+                    typeof exerciseScrollRef.current.scrollTo === 'function'
+                  ) {
+                    exerciseScrollRef.current.scrollTo({ y: 0, animated: false });
+                  }
+                }}
+                style={[
+                  styles.tabBtnCompact,
+                  {
+                    backgroundColor: active ? colors.primary : colors.background,
+                    borderColor: active ? colors.primary : colors.border,
+                  },
+                ]}
+              >
                 <Text
                   style={[
-                    styles.smallBtnText,
-                    { color: colors.secondaryForeground, fontFamily: fMed },
+                    styles.tabBtnCompactText,
+                    {
+                      color: active ? colors.primaryForeground : colors.foreground,
+                      fontFamily: fSemi,
+                    },
                   ]}
                 >
-                  {guideOpen ? 'הסתר ▲' : 'הצג ▼'}
+                  {t.label}
                 </Text>
-              </View>
-            </Pressable>
-
-            {guideOpen && (
-              <View style={[styles.accordionBody, { borderTopColor: colors.border }]}>
-                <View style={[styles.glossaryGrid, isWide && styles.glossaryGridWide]}>
-                  {GLOSSARY_ITEMS.map((item) => (
-                    <View
-                      key={item.title}
-                      style={[
-                        styles.subCard,
-                        isWide && styles.glossaryItemWide,
-                        { backgroundColor: colors.background, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                      >
-                        {item.title}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.subCardText,
-                          { color: colors.mutedForeground, fontFamily: fReg },
-                        ]}
-                      >
-                        {item.body}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={[styles.twoColGrid, isWide && styles.twoColGridWide]}>
+                {typeof t.badge === 'number' && (
                   <View
                     style={[
-                      styles.subCard,
-                      { flex: 1, backgroundColor: colors.background, borderColor: colors.border },
+                      styles.tabCountBadge,
+                      {
+                        backgroundColor: active ? 'rgba(255,255,255,0.22)' : colors.secondary,
+                      },
                     ]}
                   >
-                    <View style={styles.rowBetween}>
-                      <Text
-                        style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                      >
-                        ⚠️ בטיחות עם ספסל איקאה STOREDAMM
-                      </Text>
-                      <View style={[styles.pillBadge, { backgroundColor: colors.secondary }]}>
+                    <Text
+                      style={[
+                        styles.tabCountText,
+                        {
+                          color: active ? colors.primaryForeground : colors.secondaryForeground,
+                          fontFamily: fBold,
+                        },
+                      ]}
+                    >
+                      {t.badge}
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Row 3 (Muscle filter if 'all' + Exercise Stepper Strip in workout tabs) */}
+        {currentTab === 'all' && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.topTabsScroll}
+          >
+            {MUSCLE_FILTERS.map((mf) => {
+              const active = muscleFilter === mf;
+              const lbl = mf === 'all' ? 'כל התרגילים (10)' : mf;
+              return (
+                <Pressable
+                  key={mf}
+                  onPress={() => {
+                    setMuscleFilter(mf);
+                    setCurrentExerciseIdx(0);
+                  }}
+                  style={[
+                    styles.filterChipCompact,
+                    {
+                      backgroundColor: active ? colors.primary : colors.background,
+                      borderColor: active ? colors.primary : colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.smallBtnText,
+                      {
+                        color: active ? colors.primaryForeground : colors.foreground,
+                        fontFamily: fSemi,
+                      },
+                    ]}
+                  >
+                    {lbl}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {isWorkoutTab && visibleExercises.length > 0 && (
+          <View style={styles.stepperBarWrap}>
+            <Text
+              style={[
+                styles.stepperCounterText,
+                { color: colors.mutedForeground, fontFamily: fBold },
+              ]}
+            >
+              תרגיל {safeExIdx + 1} מתוך {visibleExercises.length}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.stepperDotsScroll}
+            >
+              {visibleExercises.map((itemEx, idx) => {
+                const isCur = idx === safeExIdx;
+                const { doneCount, effectiveSets, allDone } = getExerciseDoneStats(itemEx);
+                return (
+                  <Pressable
+                    key={itemEx.id}
+                    onPress={() => goToExercise(idx)}
+                    style={[
+                      styles.stepperDotBtn,
+                      {
+                        backgroundColor: isCur
+                          ? colors.primary
+                          : allDone
+                          ? colors.successSoft
+                          : colors.background,
+                        borderColor: isCur
+                          ? colors.primary
+                          : allDone
+                          ? colors.success
+                          : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.stepperDotText,
+                        {
+                          color: isCur
+                            ? colors.primaryForeground
+                            : allDone
+                            ? colors.success
+                            : colors.foreground,
+                          fontFamily: fBold,
+                        },
+                      ]}
+                    >
+                      {allDone ? `${idx + 1} ✓` : `${idx + 1}`}
+                      {isCur ? ` • ${itemEx.muscle}` : doneCount > 0 && !allDone ? ` (${doneCount}/${effectiveSets})` : ''}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+      </View>
+
+      {/* MAIN FULLSCREEN WORKSPACE SCROLL */}
+      <ScrollView
+        ref={exerciseScrollRef}
+        style={styles.flexOne}
+        contentContainerStyle={
+          isWorkoutTab ? styles.fullscreenWorkoutScroll : styles.scrollContent
+        }
+      >
+        <View style={isWorkoutTab ? styles.fullscreenInner : styles.maxWidthWrap}>
+          {/* SINGLE ACTIVE EXERCISE (FULLSCREEN ONE AT A TIME) */}
+          {isWorkoutTab && activeEx && (() => {
+            const ex = activeEx;
+            const idx = safeExIdx;
+            const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
+            const effectiveMode = getEffectiveMode(ex);
+            const exConfigs = getConfigsForExercise(ex);
+            const { bestWeightToday } = getExerciseDoneStats(ex);
+
+            const unitLabel =
+              effectiveMode === 'barbell'
+                ? 'קילוגרם בסך הכל במוט הארוך'
+                : ex.weightUnitLabel;
+
+            return (
+              <View
+                key={ex.id}
+                style={[
+                  styles.fullscreenExCard,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                {/* Exercise Header */}
+                <View style={[styles.exHeader, { borderBottomColor: colors.border }]}>
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <View style={styles.exTitleRow}>
+                      <View style={[styles.indexBadge, { backgroundColor: colors.primary }]}>
                         <Text
                           style={[
-                            styles.pillBadgeText,
-                            { color: colors.secondaryForeground, fontFamily: fMed },
+                            styles.indexBadgeText,
+                            { color: colors.primaryForeground, fontFamily: fBold },
                           ]}
                         >
-                          אורך 63 סנטימטר | עד 100 קילוגרם
+                          {idx + 1}
                         </Text>
                       </View>
+                      <Text
+                        style={[styles.exTitle, { color: colors.foreground, fontFamily: fBold }]}
+                      >
+                        {ex.name}
+                      </Text>
                     </View>
                     <Text
                       style={[
@@ -880,357 +1049,159 @@ export default function App() {
                         { color: colors.mutedForeground, fontFamily: fReg },
                       ]}
                     >
-                      הספסל מוגבל ל-100 קילוגרם בסך הכל (משקל הגוף שלך + המשקולות יחד). לכן לא שוכבים או יושבים עליו עם משקולות, אלא רק נשענים עליו עם יד אחת או שמים עליו רגליים או ידיים כשהוא צמוד לקיר.
+                      <Text style={{ fontFamily: fBold, color: colors.foreground }}>
+                        ציוד נדרש:{' '}
+                      </Text>
+                      {ex.equipment}
                     </Text>
                   </View>
 
-                  <View
-                    style={[
-                      styles.subCard,
-                      { flex: 1, backgroundColor: colors.background, borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                    >
-                      🏋️ דוגמה לשילוב בשבוע עם 3 אימוני קרוספיט
-                    </Text>
-                    <View style={styles.weekRow}>
-                      {WEEKLY_SCHEDULE.map((d) => {
-                        const isPrimary = d.highlight === 'primary';
-                        const isSec = d.highlight === 'secondary';
-                        const bg = isPrimary
-                          ? colors.primary
-                          : isSec
-                          ? colors.secondary
-                          : colors.card;
-                        const fg = isPrimary
-                          ? colors.primaryForeground
-                          : isSec
-                          ? colors.secondaryForeground
-                          : colors.foreground;
-                        return (
-                          <View
-                            key={d.day}
-                            style={[
-                              styles.dayBox,
-                              { backgroundColor: bg, borderColor: colors.border },
-                            ]}
-                          >
-                            <Text style={[styles.dayBoxTitle, { color: fg, fontFamily: fBold }]}>
-                              {d.day}
-                            </Text>
-                            <Text style={[styles.dayBoxSub, { color: fg, fontFamily: fReg }]}>
-                              {d.label}
-                            </Text>
-                          </View>
-                        );
-                      })}
+                  <View style={styles.exPillsCol}>
+                    <View style={[styles.pillBadge, { backgroundColor: colors.secondary }]}>
+                      <Text
+                        style={[
+                          styles.pillBadgeText,
+                          { color: colors.secondaryForeground, fontFamily: fSemi },
+                        ]}
+                      >
+                        {ex.muscle}
+                      </Text>
                     </View>
-                  </View>
-                </View>
-              </View>
-            )}
-          </View>
-
-          {/* MAIN NAVIGATION TABS */}
-          <View style={[styles.tabsWrap, { borderBottomColor: colors.border }]}>
-            {navTabs.map((t) => {
-              const active = currentTab === t.key;
-              return (
-                <Pressable
-                  key={t.key}
-                  onPress={() => {
-                    setSaveFeedback(null);
-                    setOpenSetPickerKey(null);
-                    setCurrentTab(t.key);
-                  }}
-                  style={[
-                    styles.tabBtn,
-                    {
-                      backgroundColor: active ? colors.primary : colors.card,
-                      borderColor: active ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tabBtnText,
-                      {
-                        color: active ? colors.primaryForeground : colors.foreground,
-                        fontFamily: fSemi,
-                      },
-                    ]}
-                  >
-                    {t.label}
-                  </Text>
-                  {typeof t.badge === 'number' && (
                     <View
                       style={[
-                        styles.tabCountBadge,
+                        styles.pillBadge,
                         {
-                          backgroundColor: active ? 'rgba(255,255,255,0.22)' : colors.secondary,
+                          backgroundColor: colors.background,
+                          borderColor: colors.border,
+                          borderWidth: 1,
                         },
                       ]}
                     >
                       <Text
                         style={[
-                          styles.tabCountText,
+                          styles.pillBadgeText,
+                          { color: colors.mutedForeground, fontFamily: fReg },
+                        ]}
+                      >
+                        {effectiveSets} סטים של {ex.reps}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Last Time Weight & Trend Insight */}
+                <ExerciseTrendCard
+                  exerciseId={ex.id}
+                  workoutHistory={sortedHistoryDesc}
+                  liveBestWeight={bestWeightToday}
+                  colors={colors}
+                  fontsLoaded={fontsLoaded}
+                />
+
+                {/* Exercise Body: Animation + Instructions + Per-Set Weight Picker & Plate Diagrams */}
+                <View style={[styles.exBodyGrid, isWide && styles.exBodyGridWide]}>
+                  <View style={[styles.exAnimCol, isWide && styles.exAnimColWide]}>
+                    <ExerciseAnimation
+                      exercise={ex}
+                      paused={animPaused}
+                      colors={colors}
+                      fontsLoaded={fontsLoaded}
+                    />
+                    <View style={styles.videosRow}>
+                      {ex.videos.map((v) => (
+                        <Pressable
+                          key={v.url}
+                          onPress={() => Linking.openURL(v.url)}
+                          style={[
+                            styles.videoBtn,
+                            { backgroundColor: colors.secondary, borderColor: colors.border },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.smallBtnText,
+                              { color: colors.secondaryForeground, fontFamily: fSemi },
+                            ]}
+                          >
+                            🎬 {v.label} ↗
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    {/* Tips & Warnings */}
+                    <View style={styles.twoColGrid}>
+                      <View
+                        style={[
+                          styles.subCard,
                           {
-                            color: active ? colors.primaryForeground : colors.secondaryForeground,
-                            fontFamily: fBold,
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
                           },
                         ]}
                       >
-                        {t.badge}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* SETUP BANNER FOR WORKOUT TABS */}
-          {SETUP_MESSAGES[currentTab] && (
-            <View
-              style={[
-                styles.card,
-                styles.setupBanner,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  {SETUP_MESSAGES[currentTab].title}
-                </Text>
-                <Text
-                  style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
-                >
-                  {SETUP_MESSAGES[currentTab].desc}
-                </Text>
-              </View>
-              <View style={styles.setupActionsRow}>
-                <Pressable
-                  onPress={() => setAnimPaused((p) => !p)}
-                  style={[
-                    styles.outlineBtn,
-                    { backgroundColor: colors.background, borderColor: colors.border },
-                  ]}
-                >
-                  <Text style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fMed }]}>
-                    {animPaused ? '▶ המשך אנימציות' : '⏸ השהה אנימציות'}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={clearSetCheckmarks}
-                  style={[
-                    styles.outlineBtn,
-                    { backgroundColor: colors.background, borderColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.smallBtnText,
-                      { color: colors.mutedForeground, fontFamily: fMed },
-                    ]}
-                  >
-                    נקה סימוני סטים
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-
-          {/* MUSCLE FILTER BAR ON 'ALL' TAB */}
-          {currentTab === 'all' && (
-            <View style={styles.filterRow}>
-              {MUSCLE_FILTERS.map((mf) => {
-                const active = muscleFilter === mf;
-                const lbl = mf === 'all' ? 'כל התרגילים (10)' : mf;
-                return (
-                  <Pressable
-                    key={mf}
-                    onPress={() => setMuscleFilter(mf)}
-                    style={[
-                      styles.filterChip,
-                      {
-                        backgroundColor: active ? colors.primary : colors.card,
-                        borderColor: active ? colors.primary : colors.border,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.smallBtnText,
-                        {
-                          color: active ? colors.primaryForeground : colors.foreground,
-                          fontFamily: fSemi,
-                        },
-                      ]}
-                    >
-                      {lbl}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-
-          {/* EXERCISES LIST */}
-          {currentTab !== 'progress' && currentTab !== 'calculator' && (
-            <View style={styles.exercisesList}>
-              {visibleExercises.map((ex, idx) => {
-                const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
-                const effectiveMode = getEffectiveMode(ex);
-                const exConfigs = getConfigsForExercise(ex);
-
-                const unitLabel =
-                  effectiveMode === 'barbell'
-                    ? 'קילוגרם בסך הכל במוט הארוך'
-                    : ex.weightUnitLabel;
-
-                const lastLog = getLastExerciseLog(ex.id);
-                const bestLastSet = lastLog
-                  ? lastLog.sets.reduce(
-                      (acc, cur) => (cur.weight > acc.weight ? cur : acc),
-                      lastLog.sets[0]
-                    )
-                  : null;
-
-                return (
-                  <View
-                    key={ex.id}
-                    style={[
-                      styles.card,
-                      { backgroundColor: colors.card, borderColor: colors.border },
-                    ]}
-                  >
-                    {/* Exercise Header */}
-                    <View style={[styles.exHeader, { borderBottomColor: colors.border }]}>
-                      <View style={{ flex: 1, gap: 6 }}>
-                        <View style={styles.exTitleRow}>
-                          <View style={[styles.indexBadge, { backgroundColor: colors.primary }]}>
-                            <Text
-                              style={[
-                                styles.indexBadgeText,
-                                { color: colors.primaryForeground, fontFamily: fBold },
-                              ]}
-                            >
-                              {idx + 1}
-                            </Text>
-                          </View>
-                          <Text
-                            style={[styles.exTitle, { color: colors.foreground, fontFamily: fBold }]}
-                          >
-                            {ex.name}
-                          </Text>
-                        </View>
                         <Text
                           style={[
                             styles.subCardText,
                             { color: colors.mutedForeground, fontFamily: fReg },
                           ]}
                         >
-                          <Text style={{ fontFamily: fBold, color: colors.foreground }}>
-                            ציוד נדרש:{' '}
+                          <Text style={{ color: colors.success, fontFamily: fBold }}>
+                            💡 למה זה טוב:{' '}
                           </Text>
-                          {ex.equipment}
+                          {ex.homeTip}
                         </Text>
-                        {lastLog && bestLastSet && (
-                          <View
-                            style={[styles.lastLogBadge, { backgroundColor: colors.secondary }]}
-                          >
-                            <Text
-                              style={[
-                                styles.lastLogText,
-                                { color: colors.secondaryForeground, fontFamily: fMed },
-                              ]}
-                            >
-                              📌 בפעם הקודמת ({lastLog.date}):{' '}
-                              <Text style={{ fontFamily: fBold }}>
-                                {bestLastSet.weight} קילוגרם × {bestLastSet.reps} חזרות
-                              </Text>
-                            </Text>
-                          </View>
-                        )}
                       </View>
-
-                      <View style={styles.exPillsCol}>
-                        <View style={[styles.pillBadge, { backgroundColor: colors.secondary }]}>
-                          <Text
-                            style={[
-                              styles.pillBadgeText,
-                              { color: colors.secondaryForeground, fontFamily: fSemi },
-                            ]}
-                          >
-                            {ex.muscle}
-                          </Text>
-                        </View>
-                        <View
+                      <View
+                        style={[
+                          styles.subCard,
+                          {
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
+                          },
+                        ]}
+                      >
+                        <Text
                           style={[
-                            styles.pillBadge,
-                            {
-                              backgroundColor: colors.background,
-                              borderColor: colors.border,
-                              borderWidth: 1,
-                            },
+                            styles.subCardText,
+                            { color: colors.mutedForeground, fontFamily: fReg },
                           ]}
                         >
-                          <Text
-                            style={[
-                              styles.pillBadgeText,
-                              { color: colors.mutedForeground, fontFamily: fReg },
-                            ]}
-                          >
-                            {effectiveSets} סטים של {ex.reps}
+                          <Text style={{ color: colors.danger, fontFamily: fBold }}>
+                            ⚠️ ממה להיזהר:{' '}
                           </Text>
-                        </View>
+                          {ex.avoid}
+                        </Text>
                       </View>
                     </View>
 
-                    {/* Exercise Body: Animation + Instructions + Supported-Weight Logger */}
-                    <View style={[styles.exBodyGrid, isWide && styles.exBodyGridWide]}>
-                      <View style={[styles.exAnimCol, isWide && styles.exAnimColWide]}>
-                        <ExerciseAnimation
-                          exercise={ex}
-                          paused={animPaused}
-                          colors={colors}
-                          fontsLoaded={fontsLoaded}
-                        />
-                        <View style={styles.videosRow}>
-                          {ex.videos.map((v) => (
-                            <Pressable
-                              key={v.url}
-                              onPress={() => Linking.openURL(v.url)}
-                              style={[
-                                styles.videoBtn,
-                                { backgroundColor: colors.secondary, borderColor: colors.border },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.smallBtnText,
-                                  { color: colors.secondaryForeground, fontFamily: fSemi },
-                                ]}
-                              >
-                                🎬 {v.label} ↗
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </View>
-                      </View>
-
-                      <View style={[styles.exDetailsCol, isWide && styles.exDetailsColWide]}>
+                    {/* Collapsible Step-by-Step Instructions */}
+                    <View
+                      style={[
+                        styles.subCard,
+                        { backgroundColor: colors.background, borderColor: colors.border },
+                      ]}
+                    >
+                      <Pressable
+                        onPress={() => setStepsExpanded((prev) => !prev)}
+                        style={styles.rowBetween}
+                      >
                         <Text
                           style={[
                             styles.subCardTitle,
                             { color: colors.foreground, fontFamily: fBold },
                           ]}
                         >
-                          איך לבצע צעד-אחר-צעד:
+                          📋 איך לבצע צעד-אחר-צעד:
                         </Text>
-                        <View style={{ gap: 8 }}>
+                        <Text
+                          style={[styles.smallBtnText, { color: colors.primary, fontFamily: fSemi }]}
+                        >
+                          {stepsExpanded ? 'הסתר ▲' : 'הצג ▼'}
+                        </Text>
+                      </Pressable>
+                      {stepsExpanded && (
+                        <View style={{ gap: 8, marginTop: 4 }}>
                           {ex.steps.map((st, sIdx) => (
                             <View key={sIdx} style={styles.stepRow}>
                               <View
@@ -1259,54 +1230,11 @@ export default function App() {
                             </View>
                           ))}
                         </View>
+                      )}
+                    </View>
+                  </View>
 
-                        {/* Tips & Warnings */}
-                        <View style={[styles.twoColGrid, isWide && styles.twoColGridWide]}>
-                          <View
-                            style={[
-                              styles.subCard,
-                              {
-                                flex: 1,
-                                backgroundColor: colors.background,
-                                borderColor: colors.border,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.subCardText,
-                                { color: colors.mutedForeground, fontFamily: fReg },
-                              ]}
-                            >
-                              <Text style={{ color: colors.success, fontFamily: fBold }}>
-                                💡 למה זה טוב:{' '}
-                              </Text>
-                              {ex.homeTip}
-                            </Text>
-                          </View>
-                          <View
-                            style={[
-                              styles.subCard,
-                              {
-                                flex: 1,
-                                backgroundColor: colors.background,
-                                borderColor: colors.border,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.subCardText,
-                                { color: colors.mutedForeground, fontFamily: fReg },
-                              ]}
-                            >
-                              <Text style={{ color: colors.danger, fontFamily: fBold }}>
-                                ⚠️ ממה להיזהר:{' '}
-                              </Text>
-                              {ex.avoid}
-                            </Text>
-                          </View>
-                        </View>
+                  <View style={[styles.exDetailsCol, isWide && styles.exDetailsColWide]}>
 
                         {/* PER-SET SUPPORTED WEIGHT PICKER + ANIMATED BUILD DRAWING + REPS LOGGER */}
                         <View style={[styles.loggerSection, { borderTopColor: colors.border }]}>
@@ -1680,94 +1608,13 @@ export default function App() {
                     </View>
                   </View>
                 );
-              })}
-            </View>
-          )}
+              })()}
 
-          {/* SAVE WORKOUT TO LOG CARD */}
-          {SETUP_MESSAGES[currentTab] && (
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.primary,
-                  borderWidth: 2,
-                },
-              ]}
-            >
-              <View style={styles.rowBetween}>
-                <View style={{ flex: 1, gap: 4 }}>
-                  <Text
-                    style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                  >
-                    🎉 סיימת את האימון? שמור אותו ביומן ההתקדמות!
-                  </Text>
-                  <Text
-                    style={[
-                      styles.subCardText,
-                      { color: colors.mutedForeground, fontFamily: fReg },
-                    ]}
-                  >
-                    כל הסטים שסימנת (כולל המשקלים ומספר החזרות) יישמרו עם התאריך של היום בענן ועל המכשיר, ובאימון הבא יתמלאו אוטומטית.
-                  </Text>
-                </View>
-                <View style={[styles.pillBadge, { backgroundColor: colors.secondary }]}>
-                  <Text
-                    style={[
-                      styles.pillBadgeText,
-                      { color: colors.secondaryForeground, fontFamily: fBold },
-                    ]}
-                  >
-                    {totalDoneInView} מתוך {totalSetsInView} סטים סומנו
-                  </Text>
-                </View>
-              </View>
-
-              <View style={[styles.saveInputRow, isWide && styles.saveInputRowWide]}>
-                <TextInput
-                  value={workoutNote}
-                  onChangeText={setWorkoutNote}
-                  placeholder="הערה לעצמך לפעם הבאה (לא חובה – למשל: היה קל בלחיצת חזה, לעלות מדרגה במשקל)"
-                  placeholderTextColor={colors.mutedForeground}
-                  style={[
-                    styles.noteInput,
-                    {
-                      backgroundColor: colors.background,
-                      borderColor: colors.border,
-                      color: colors.foreground,
-                      fontFamily: fReg,
-                    },
-                  ]}
-                />
-                <Pressable
-                  onPress={handleSaveWorkoutSession}
-                  style={[styles.savePrimaryBtn, { backgroundColor: colors.primary }]}
-                >
-                  <Text
-                    style={[
-                      styles.savePrimaryBtnText,
-                      { color: colors.primaryForeground, fontFamily: fBold },
-                    ]}
-                  >
-                    💾 שמור אימון ביומן
-                  </Text>
-                </Pressable>
-              </View>
-
-              {saveFeedback && (
-                <Text
-                  style={[
-                    styles.feedbackText,
-                    {
-                      color: saveFeedback.error ? colors.danger : colors.success,
-                      fontFamily: fSemi,
-                    },
-                  ]}
-                >
-                  {saveFeedback.text}
-                </Text>
-              )}
+          {isWorkoutTab && !activeEx && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
+                לא נמצאו תרגילים בסינון הנוכחי. בחר קבוצת שריר אחרת למעלה.
+              </Text>
             </View>
           )}
 
@@ -2470,6 +2317,380 @@ export default function App() {
           )}
         </View>
       </ScrollView>
+
+      {/* PINNED FULLSCREEN BOTTOM NAVIGATION BAR */}
+      {isWorkoutTab && activeEx && (
+        <View
+          style={[
+            styles.bottomNavBar,
+            { backgroundColor: colors.card, borderTopColor: colors.border },
+          ]}
+        >
+          {/* In RTL row-reverse: first child renders on Right (Previous), middle Save, last on Left (Next / Finish) */}
+          <Pressable
+            disabled={safeExIdx <= 0}
+            onPress={() => goToExercise(safeExIdx - 1)}
+            style={[
+              styles.bottomNavBtn,
+              {
+                backgroundColor: colors.background,
+                borderColor: colors.border,
+                opacity: safeExIdx <= 0 ? 0.35 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.bottomNavBtnText, { color: colors.foreground, fontFamily: fSemi }]}>
+              → הקודם
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              setSaveFeedback(null);
+              setSaveModalOpen(true);
+            }}
+            style={[
+              styles.bottomSaveBtn,
+              {
+                backgroundColor:
+                  totalDoneInView > 0 ? colors.primarySoft : colors.background,
+                borderColor: totalDoneInView > 0 ? colors.primary : colors.border,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.bottomNavBtnText,
+                {
+                  color: totalDoneInView > 0 ? colors.primary : colors.foreground,
+                  fontFamily: fBold,
+                },
+              ]}
+            >
+              💾 שמור ({totalDoneInView}/{totalSetsInView})
+            </Text>
+          </Pressable>
+
+          {safeExIdx < visibleExercises.length - 1 ? (
+            <Pressable
+              onPress={() => goToExercise(safeExIdx + 1)}
+              style={[
+                styles.bottomNavBtn,
+                { backgroundColor: colors.primary, borderColor: colors.primary },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.bottomNavBtnText,
+                  { color: colors.primaryForeground, fontFamily: fBold },
+                ]}
+              >
+                הבא ←
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => {
+                setSaveFeedback(null);
+                setSaveModalOpen(true);
+              }}
+              style={[
+                styles.bottomNavBtn,
+                { backgroundColor: colors.success, borderColor: colors.success },
+              ]}
+            >
+              <Text style={[styles.bottomNavBtnText, { color: '#ffffff', fontFamily: fBold }]}>
+                🏁 סיום ושמירה
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {/* GUIDE, EQUIPMENT INVENTORY & SAFETY MODAL */}
+      <Modal
+        visible={guideModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setGuideModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View style={[styles.rowBetween, { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 }]}>
+              <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                📖 מדריך, ציוד ביתי ולוח שבועי
+              </Text>
+              <Pressable
+                onPress={() => setGuideModalOpen(false)}
+                style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
+              >
+                <Text
+                  style={[
+                    styles.smallBtnText,
+                    { color: colors.secondaryForeground, fontFamily: fBold },
+                  ]}
+                >
+                  סגור ✕
+                </Text>
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ gap: 12, paddingVertical: 6 }}>
+              {SETUP_MESSAGES[currentTab] && (
+                <View
+                  style={[
+                    styles.subCard,
+                    { backgroundColor: colors.background, borderColor: colors.border },
+                  ]}
+                >
+                  <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                    {SETUP_MESSAGES[currentTab].title}
+                  </Text>
+                  <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
+                    {SETUP_MESSAGES[currentTab].desc}
+                  </Text>
+                </View>
+              )}
+
+              <View
+                style={[
+                  styles.inventoryStrip,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.inventoryTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                  📦 תכולת ארגז המשקולות שלך (האתר מאפשר אך ורק משקלים שניתן להרכיב מהציוד הזה):
+                </Text>
+                <View style={styles.filterRow}>
+                  {EQUIPMENT_SUMMARY_ITEMS.map((item) => (
+                    <View
+                      key={item}
+                      style={[
+                        styles.inventoryChip,
+                        { backgroundColor: colors.card, borderColor: colors.border },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.pillBadgeText, { color: colors.foreground, fontFamily: fMed }]}
+                      >
+                        • {item}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <View style={[styles.glossaryGrid, isWide && styles.glossaryGridWide]}>
+                {GLOSSARY_ITEMS.map((item) => (
+                  <View
+                    key={item.title}
+                    style={[
+                      styles.subCard,
+                      isWide && styles.glossaryItemWide,
+                      { backgroundColor: colors.background, borderColor: colors.border },
+                    ]}
+                  >
+                    <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
+                    >
+                      {item.body}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <View
+                style={[
+                  styles.subCard,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                  ⚠️ בטיחות עם ספסל איקאה STOREDAMM (עד 100 קילוגרם)
+                </Text>
+                <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
+                  הספסל מוגבל ל-100 קילוגרם בסך הכל (משקל הגוף שלך + המשקולות יחד). לכן לא שוכבים או יושבים עליו עם משקולות, אלא רק נשענים עליו עם יד אחת או שמים עליו רגליים או ידיים כשהוא צמוד לקיר.
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.subCard,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                  🏋️ דוגמה לשילוב בשבוע עם 3 אימוני קרוספיט
+                </Text>
+                <View style={styles.weekRow}>
+                  {WEEKLY_SCHEDULE.map((d) => {
+                    const isPrimary = d.highlight === 'primary';
+                    const isSec = d.highlight === 'secondary';
+                    const bg = isPrimary
+                      ? colors.primary
+                      : isSec
+                      ? colors.secondary
+                      : colors.card;
+                    const fg = isPrimary
+                      ? colors.primaryForeground
+                      : isSec
+                      ? colors.secondaryForeground
+                      : colors.foreground;
+                    return (
+                      <View
+                        key={d.day}
+                        style={[styles.dayBox, { backgroundColor: bg, borderColor: colors.border }]}
+                      >
+                        <Text style={[styles.dayBoxTitle, { color: fg, fontFamily: fBold }]}>
+                          {d.day}
+                        </Text>
+                        <Text style={[styles.dayBoxSub, { color: fg, fontFamily: fReg }]}>
+                          {d.label}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <Pressable
+                onPress={() => {
+                  clearSetCheckmarks();
+                  setGuideModalOpen(false);
+                }}
+                style={[
+                  styles.outlineBtn,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[styles.smallBtnText, { color: colors.danger, fontFamily: fSemi }]}>
+                  🧹 נקה את כל סימוני הסטים באימון הנוכחי
+                </Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* SAVE WORKOUT MODAL */}
+      <Modal
+        visible={saveModalOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSaveModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalCard,
+              styles.saveModalCard,
+              { backgroundColor: colors.card, borderColor: colors.primary },
+            ]}
+          >
+            <View style={styles.rowBetween}>
+              <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                🎉 שמירת האימון ביומן ההתקדמות
+              </Text>
+              <Pressable
+                onPress={() => setSaveModalOpen(false)}
+                style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
+              >
+                <Text
+                  style={[
+                    styles.smallBtnText,
+                    { color: colors.secondaryForeground, fontFamily: fBold },
+                  ]}
+                >
+                  סגור ✕
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.pillBadge, { backgroundColor: colors.secondary, alignSelf: 'flex-end' }]}>
+              <Text
+                style={[
+                  styles.pillBadgeText,
+                  { color: colors.secondaryForeground, fontFamily: fBold },
+                ]}
+              >
+                {totalDoneInView} מתוך {totalSetsInView} סטים סומנו כבוצעו
+              </Text>
+            </View>
+
+            <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
+              כל הסטים שסימנת (כולל המשקלים ומספר החזרות) יישמרו עם התאריך של היום בענן ועל המכשיר, ויעדכנו אוטומטית את נתוני הפעם הקודמת והמגמה בכל תרגיל!
+            </Text>
+
+            <TextInput
+              value={workoutNote}
+              onChangeText={setWorkoutNote}
+              placeholder="הערה לעצמך לפעם הבאה (לא חובה – למשל: היה קל בלחיצת חזה, לעלות מדרגה במשקל)"
+              placeholderTextColor={colors.mutedForeground}
+              style={[
+                styles.noteInput,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                  fontFamily: fReg,
+                },
+              ]}
+            />
+
+            {saveFeedback && (
+              <Text
+                style={[
+                  styles.feedbackText,
+                  {
+                    color: saveFeedback.error ? colors.danger : colors.success,
+                    fontFamily: fSemi,
+                  },
+                ]}
+              >
+                {saveFeedback.text}
+              </Text>
+            )}
+
+            <View style={styles.rowBetween}>
+              <Pressable
+                onPress={clearSetCheckmarks}
+                style={[
+                  styles.outlineBtn,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={[styles.smallBtnText, { color: colors.mutedForeground, fontFamily: fMed }]}
+                >
+                  🧹 נקה סימוני סטים
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={handleSaveWorkoutSession}
+                style={[styles.savePrimaryBtn, { backgroundColor: colors.primary }]}
+              >
+                <Text
+                  style={[
+                    styles.savePrimaryBtnText,
+                    { color: colors.primaryForeground, fontFamily: fBold },
+                  ]}
+                >
+                  💾 שמור אימון ביומן
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -2478,6 +2699,211 @@ const styles = StyleSheet.create({
   safeRoot: {
     flex: 1,
   },
+  webFullscreenRoot: {
+    height: '100dvh',
+    maxHeight: '100dvh',
+    overflow: 'hidden',
+  },
+  flexOne: {
+    flex: 1,
+  },
+  topShell: {
+    borderBottomWidth: 1,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  topRow1: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  topBrandCol: {
+    flex: 1,
+    minWidth: 220,
+    gap: 6,
+  },
+  topBrandTitleRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+  },
+  compactTitle: {
+    fontSize: 17,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  compactSyncBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  compactSyncText: {
+    fontSize: 11,
+    writingDirection: 'rtl',
+  },
+  topUtilityRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  utilityBtn: {
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  utilityBtnText: {
+    fontSize: 11,
+    writingDirection: 'rtl',
+  },
+  compactTimerBox: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  compactTimerVal: {
+    fontSize: 14,
+    marginLeft: 2,
+  },
+  miniTimerBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 7,
+  },
+  miniTimerBtnText: {
+    fontSize: 11,
+    writingDirection: 'rtl',
+  },
+  topTabsScroll: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  tabBtnCompact: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  tabBtnCompactText: {
+    fontSize: 12,
+    writingDirection: 'rtl',
+  },
+  filterChipCompact: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 9,
+    borderWidth: 1,
+  },
+  stepperBarWrap: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 2,
+  },
+  stepperCounterText: {
+    fontSize: 12,
+    writingDirection: 'rtl',
+  },
+  stepperDotsScroll: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+  },
+  stepperDotBtn: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  stepperDotText: {
+    fontSize: 12,
+    writingDirection: 'rtl',
+  },
+  fullscreenWorkoutScroll: {
+    flexGrow: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  fullscreenInner: {
+    flex: 1,
+    width: '100%',
+  },
+  fullscreenExCard: {
+    flex: 1,
+    width: '100%',
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    gap: 12,
+  },
+  bottomNavBar: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    borderTopWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  bottomNavBtn: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomSaveBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomNavBtnText: {
+    fontSize: 13,
+    writingDirection: 'rtl',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.58)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 14,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 720,
+    maxHeight: '88%',
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    gap: 10,
+  },
+  saveModalCard: {
+    maxWidth: 520,
+    borderWidth: 2,
+    gap: 12,
+  },
   scrollContent: {
     paddingHorizontal: 14,
     paddingVertical: 18,
@@ -2485,7 +2911,7 @@ const styles = StyleSheet.create({
   },
   maxWidthWrap: {
     width: '100%',
-    maxWidth: 1024,
+    maxWidth: 1120,
     gap: 16,
   },
   card: {
