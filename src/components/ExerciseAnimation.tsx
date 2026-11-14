@@ -867,11 +867,12 @@ export default function ExerciseAnimation({
         </View>
       )}
 
-      <View style={styles.cueHeader}>
+      <View style={[styles.cueHeader, micro && styles.cueHeaderMicro]}>
         <Text
           numberOfLines={1}
           style={[
             styles.cueText,
+            micro && styles.cueTextMicro,
             { color: colors.primary, fontFamily: fontForWeight('semibold', fontsLoaded) },
           ]}
         >
@@ -989,11 +990,17 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
+  cueHeaderMicro: {
+    justifyContent: 'center',
+  },
   cueText: {
     fontSize: 12,
     textAlign: 'right',
     writingDirection: 'rtl',
     flexShrink: 1,
+  },
+  cueTextMicro: {
+    textAlign: 'center',
   },
   loopBadge: {
     paddingHorizontal: 8,
@@ -1015,12 +1022,16 @@ const styles = StyleSheet.create({
   svgWrapCompact: {
     flex: 1,
     minHeight: 96,
-    maxHeight: 195,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   svgWrapMicro: {
     flex: 1,
     minHeight: 82,
-    maxHeight: 185,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   metaFooter: {
     borderTopWidth: 1,

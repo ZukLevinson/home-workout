@@ -715,11 +715,15 @@ const styles = StyleSheet.create({
   svgContainerCompact: {
     flex: 1,
     minHeight: 82,
-    maxHeight: 168,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   svgContainerMicro: {
     flex: 1,
     minHeight: 82,
-    maxHeight: 185,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
