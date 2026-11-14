@@ -588,6 +588,11 @@ export default function App(): React.ReactElement {
     });
     if (nextDone) {
       startTimer(ex.restSec);
+      if (setNum < ex.sets) {
+        setCurrentSetIdx(setNum);
+      } else {
+        goNextStep();
+      }
     }
   };
 
