@@ -15,6 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import type { User } from 'firebase/auth';
 import {
   useFonts,
   Rubik_400Regular,
@@ -51,14 +52,35 @@ import {
   deleteWorkoutFromCloud,
   connectGoogleAccount,
 } from './src/services/firebase';
+import type {
+  ActiveDraft,
+  EquipmentMode,
+  Exercise,
+  LoggedExerciseItem,
+  LoggedSet,
+  ModeOverrideEntry,
+  PlateConfig,
+  SetEntry,
+  SyncStatus,
+  WorkoutSession,
+  WorkoutTabKey,
+} from './src/types';
 
-function formatTime(sec) {
+function formatTime(sec: number): string {
   const m = String(Math.floor(sec / 60)).padStart(2, '0');
   const s = String(sec % 60).padStart(2, '0');
   return `${m}:${s}`;
 }
 
-const CONFIG_CACHE = {
+function isSetEntry(val: SetEntry | ModeOverrideEntry | undefined): val is SetEntry {
+  return Boolean(val && 'weight' in val && 'reps' in val);
+}
+
+function isModeOverride(val: SetEntry | ModeOverrideEntry | undefined): val is ModeOverrideEntry {
+  return Boolean(val && 'mode' in val);
+}
+
+const CONFIG_CACHE: Record<EquipmentMode, PlateConfig[]> = {
   pair: buildConfigsForMode('pair'),
   single: buildConfigsForMode('single'),
   barbell: buildConfigsForMode('barbell'),
@@ -66,7 +88,7 @@ const CONFIG_CACHE = {
   bodyweight: buildConfigsForMode('bodyweight'),
 };
 
-export default function App() {
+export default function App(): React.ReactElement {
   const scheme = useColorScheme();
   const colors = scheme === 'dark' ? darkColors : lightColors;
   const { width } = useWindowDimensions();
@@ -80,47 +102,50 @@ export default function App() {
   });
 
   // Navigation & UI state
-  const [currentTab, setCurrentTab] = useState('workoutA');
-  const [currentExerciseIdx, setCurrentExerciseIdx] = useState(0);
-  const [currentSetIdx, setCurrentSetIdx] = useState(0);
-  const [mobilePane, setMobilePane] = useState('set'); // 'set' | 'demo' | 'trend'
-  const [infoSubPane, setInfoSubPane] = useState('demo'); // 'demo' | 'steps'
-  const [guideModalOpen, setGuideModalOpen] = useState(false);
-  const [saveModalOpen, setSaveModalOpen] = useState(false);
-  const [muscleFilter, setMuscleFilter] = useState('all');
-  const [animPaused, setAnimPaused] = useState(false);
-  const exerciseScrollRef = useRef(null);
+  const [currentTab, setCurrentTab] = useState<WorkoutTabKey>('workoutA');
+  const [currentExerciseIdx, setCurrentExerciseIdx] = useState<number>(0);
+  const [currentSetIdx, setCurrentSetIdx] = useState<number>(0);
+  const [mobilePane, setMobilePane] = useState<'set' | 'demo' | 'trend'>('set');
+  const [infoSubPane, setInfoSubPane] = useState<'demo' | 'steps'>('demo');
+  const [guideModalOpen, setGuideModalOpen] = useState<boolean>(false);
+  const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
+  const [muscleFilter, setMuscleFilter] = useState<string>('all');
+  const [animPaused, setAnimPaused] = useState<boolean>(false);
+  const exerciseScrollRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
 
   // Optional per-exercise mode override (e.g. ex1 Floor Press can toggle pair <-> barbell)
-  const [exModeOverrides, setExModeOverrides] = useState({});
+  const [exModeOverrides, setExModeOverrides] = useState<Partial<Record<string, EquipmentMode>>>({});
 
   // Rest timer state
-  const [timerSeconds, setTimerSeconds] = useState(90);
-  const [timerRunning, setTimerRunning] = useState(false);
-  const [timerFinished, setTimerFinished] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState<number>(90);
+  const [timerRunning, setTimerRunning] = useState<boolean>(false);
+  const [timerFinished, setTimerFinished] = useState<boolean>(false);
 
   // Progress & Firebase Cloud state
-  const [activeDraft, setActiveDraft] = useState({});
-  const [workoutHistory, setWorkoutHistory] = useState([]);
-  const [workoutNote, setWorkoutNote] = useState('');
-  const [saveFeedback, setSaveFeedback] = useState(null);
-  const [chartExerciseId, setChartExerciseId] = useState('ex1');
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  const [syncStatus, setSyncStatus] = useState({
+  const [activeDraft, setActiveDraft] = useState<ActiveDraft>({});
+  const [workoutHistory, setWorkoutHistory] = useState<WorkoutSession[]>([]);
+  const [workoutNote, setWorkoutNote] = useState<string>('');
+  const [saveFeedback, setSaveFeedback] = useState<{ error: boolean; text: string } | null>(null);
+  const [chartExerciseId, setChartExerciseId] = useState<string>('ex1');
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     mode: isFirebaseConfigured() ? 'connecting' : 'local',
     message: isFirebaseConfigured()
       ? 'מתחבר למסד הנתונים בענן...'
       : 'שמירה מקומית על המכשיר',
   });
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const [importJsonText, setImportJsonText] = useState('');
+  const [importModalOpen, setImportModalOpen] = useState<boolean>(false);
+  const [importJsonText, setImportJsonText] = useState<string>('');
 
   // Plate calculator state
-  const [calcMode, setCalcMode] = useState('pair');
-  const calcConfigs = useMemo(() => CONFIG_CACHE[calcMode] || buildConfigsForMode(calcMode), [calcMode]);
-  const [calcIdx, setCalcIdx] = useState(6);
+  const [calcMode, setCalcMode] = useState<EquipmentMode>('pair');
+  const calcConfigs = useMemo(
+    () => CONFIG_CACHE[calcMode] || buildConfigsForMode(calcMode),
+    [calcMode]
+  );
+  const [calcIdx, setCalcIdx] = useState<number>(6);
 
-  const draftSyncTimeout = useRef(null);
+  const draftSyncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -202,7 +227,7 @@ export default function App() {
     return () => clearInterval(id);
   }, [timerRunning]);
 
-  const startTimer = (sec) => {
+  const startTimer = (sec: number) => {
     setTimerFinished(false);
     setTimerSeconds(sec);
     setTimerRunning(true);
@@ -223,7 +248,7 @@ export default function App() {
     [workoutHistory]
   );
 
-  const getLastExerciseLog = (exId) => {
+  const getLastExerciseLog = (exId: string) => {
     for (let i = 0; i < sortedHistoryDesc.length; i++) {
       const sess = sortedHistoryDesc[i];
       const found = (sess.items || []).find(
@@ -236,24 +261,27 @@ export default function App() {
     return null;
   };
 
-  const getEffectiveMode = (ex) => {
-    if (exModeOverrides[ex.id]) return exModeOverrides[ex.id];
-    if (activeDraft[`__mode_${ex.id}`]?.mode) return activeDraft[`__mode_${ex.id}`].mode;
+  const getEffectiveMode = (ex: Exercise): EquipmentMode => {
+    const override = exModeOverrides[ex.id];
+    if (override) return override;
+    const draftMode = activeDraft[`__mode_${ex.id}`];
+    if (isModeOverride(draftMode)) return draftMode.mode;
     return ex.equipmentMode || 'pair';
   };
 
-  const getConfigsForExercise = (ex) => {
+  const getConfigsForExercise = (ex: Exercise): PlateConfig[] => {
     const mode = getEffectiveMode(ex);
     return CONFIG_CACHE[mode] || CONFIG_CACHE.pair;
   };
 
-  const getSetEntry = (ex, setNum) => {
+  const getSetEntry = (ex: Exercise, setNum: number): SetEntry => {
     const configs = getConfigsForExercise(ex);
     const key = `${ex.id}-${setNum}`;
-    if (activeDraft[key]) {
-      const snapped = snapToSupportedWeight(activeDraft[key].weight, configs);
+    const existing = activeDraft[key];
+    if (isSetEntry(existing)) {
+      const snapped = snapToSupportedWeight(existing.weight, configs);
       return {
-        ...activeDraft[key],
+        ...existing,
         weight: snapped,
       };
     }
@@ -272,7 +300,7 @@ export default function App() {
     };
   };
 
-  const persistDraft = (nextDraft) => {
+  const persistDraft = (nextDraft: ActiveDraft) => {
     setActiveDraft(nextDraft);
     saveLocalDraft(nextDraft);
     if (firebaseUser) {
@@ -283,11 +311,11 @@ export default function App() {
     }
   };
 
-  const setExerciseEquipmentMode = (ex, nextMode) => {
+  const setExerciseEquipmentMode = (ex: Exercise, nextMode: EquipmentMode) => {
     setExModeOverrides((prev) => ({ ...prev, [ex.id]: nextMode }));
     const nextConfigs = CONFIG_CACHE[nextMode] || CONFIG_CACHE.pair;
     const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
-    const updated = {
+    const updated: ActiveDraft = {
       ...activeDraft,
       [`__mode_${ex.id}`]: { mode: nextMode },
     };
@@ -303,13 +331,16 @@ export default function App() {
   };
 
   // Step weight strictly along the supported home-equipment weights array!
-  const stepSupportedWeight = (ex, setNum, direction) => {
+  const stepSupportedWeight = (ex: Exercise, setNum: number, direction: number) => {
     const configs = getConfigsForExercise(ex);
     const cur = getSetEntry(ex, setNum);
     let idx = configs.findIndex((c) => c.totalWeight === cur.weight);
     if (idx === -1) {
       const snapped = snapToSupportedWeight(cur.weight, configs);
-      idx = Math.max(0, configs.findIndex((c) => c.totalWeight === snapped));
+      idx = Math.max(
+        0,
+        configs.findIndex((c) => c.totalWeight === snapped)
+      );
     }
     const nextIdx = Math.max(0, Math.min(configs.length - 1, idx + direction));
     const key = `${ex.id}-${setNum}`;
@@ -319,7 +350,7 @@ export default function App() {
     });
   };
 
-  const selectWeightForSet = (ex, setNum, exactWeight) => {
+  const selectWeightForSet = (ex: Exercise, setNum: number, exactWeight: number) => {
     const cur = getSetEntry(ex, setNum);
     const key = `${ex.id}-${setNum}`;
     persistDraft({
@@ -329,9 +360,9 @@ export default function App() {
   };
 
   // Apply chosen supported weight to all uncompleted sets of this exercise (or all sets if all done)
-  const selectWeightForExercise = (ex, exactWeight) => {
+  const selectWeightForExercise = (ex: Exercise, exactWeight: number) => {
     const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
-    const updated = { ...activeDraft };
+    const updated: ActiveDraft = { ...activeDraft };
     let changedAny = false;
     for (let s = 1; s <= effectiveSets; s++) {
       const cur = getSetEntry(ex, s);
@@ -349,7 +380,7 @@ export default function App() {
     persistDraft(updated);
   };
 
-  const stepReps = (ex, setNum, delta) => {
+  const stepReps = (ex: Exercise, setNum: number, delta: number) => {
     const key = `${ex.id}-${setNum}`;
     const cur = getSetEntry(ex, setNum);
     const nextVal = Math.max(1, Math.round((Number(cur.reps) || 1) + delta));
@@ -359,7 +390,7 @@ export default function App() {
     });
   };
 
-  const updateRepsText = (ex, setNum, raw) => {
+  const updateRepsText = (ex: Exercise, setNum: number, raw: string) => {
     const key = `${ex.id}-${setNum}`;
     const cur = getSetEntry(ex, setNum);
     const parsed = parseInt(raw, 10);
@@ -370,7 +401,7 @@ export default function App() {
     });
   };
 
-  const toggleSetDone = (ex, setNum) => {
+  const toggleSetDone = (ex: Exercise, setNum: number) => {
     const key = `${ex.id}-${setNum}`;
     const cur = getSetEntry(ex, setNum);
     const nextDone = !cur.done;
@@ -384,12 +415,13 @@ export default function App() {
   };
 
   const clearSetCheckmarks = () => {
-    const cleaned = {};
+    const cleaned: ActiveDraft = {};
     Object.keys(activeDraft).forEach((k) => {
+      const entry = activeDraft[k];
       if (k.startsWith('__mode_')) {
-        cleaned[k] = activeDraft[k];
-      } else {
-        cleaned[k] = { ...activeDraft[k], done: false };
+        cleaned[k] = entry;
+      } else if (isSetEntry(entry)) {
+        cleaned[k] = { ...entry, done: false };
       }
     });
     persistDraft(cleaned);
@@ -398,17 +430,17 @@ export default function App() {
   const visibleExercises = useMemo(() => {
     if (currentTab === 'workoutA') {
       return EXERCISES.filter((e) => e.workouts.includes('workoutA')).sort(
-        (a, b) => a.orderA - b.orderA
+        (a, b) => (a.orderA ?? 999) - (b.orderA ?? 999)
       );
     }
     if (currentTab === 'workoutB') {
       return EXERCISES.filter((e) => e.workouts.includes('workoutB')).sort(
-        (a, b) => a.orderB - b.orderB
+        (a, b) => (a.orderB ?? 999) - (b.orderB ?? 999)
       );
     }
     if (currentTab === 'express') {
       return EXERCISES.filter((e) => e.workouts.includes('express')).sort(
-        (a, b) => a.orderExpress - b.orderExpress
+        (a, b) => (a.orderExpress ?? 999) - (b.orderExpress ?? 999)
       );
     }
     if (currentTab === 'all') {
@@ -433,12 +465,12 @@ export default function App() {
   }, [visibleExercises, activeDraft, exModeOverrides, currentTab, sortedHistoryDesc]);
 
   const handleSaveWorkoutSession = async () => {
-    const items = [];
+    const items: LoggedExerciseItem[] = [];
     let sessionTotalSets = 0;
 
     visibleExercises.forEach((ex) => {
       const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
-      const doneSets = [];
+      const doneSets: LoggedSet[] = [];
       for (let s = 1; s <= effectiveSets; s++) {
         const entry = getSetEntry(ex, s);
         if (entry.done) {
@@ -477,10 +509,10 @@ export default function App() {
       minute: '2-digit',
     });
 
-    const allowedTabs = ['workoutA', 'workoutB', 'express', 'all'];
+    const allowedTabs: WorkoutTabKey[] = ['workoutA', 'workoutB', 'express', 'all'];
     const workoutTab = allowedTabs.includes(currentTab) ? currentTab : 'workoutA';
 
-    const sessionDoc = {
+    const sessionDoc: WorkoutSession = {
       id: `sess_${nowMs}`,
       isoDate: now.toISOString(),
       createdAtMs: nowMs,
@@ -499,7 +531,7 @@ export default function App() {
     if (firebaseUser) {
       try {
         await saveWorkoutToCloud(firebaseUser.uid, sessionDoc);
-      } catch (err) {
+      } catch {
         // Local copy already saved
       }
     }
@@ -507,17 +539,18 @@ export default function App() {
     clearSetCheckmarks();
     setWorkoutNote('');
     setSaveFeedback(null);
+    setSaveModalOpen(false);
     setCurrentTab('progress');
   };
 
-  const handleDeleteSession = async (sessionId) => {
+  const handleDeleteSession = async (sessionId: string) => {
     const nextHistory = sortedHistoryDesc.filter((s) => s.id !== sessionId);
     setWorkoutHistory(nextHistory);
     await saveLocalHistory(nextHistory);
     if (firebaseUser) {
       try {
         await deleteWorkoutFromCloud(firebaseUser.uid, sessionId);
-      } catch (err) {
+      } catch {
         // ignore
       }
     }
@@ -551,9 +584,12 @@ export default function App() {
 
   const handleApplyImportJson = async () => {
     try {
-      const parsed = JSON.parse(importJsonText);
+      const parsed = JSON.parse(importJsonText) as {
+        workoutHistory?: Partial<WorkoutSession>[];
+        activeDraft?: ActiveDraft;
+      };
       if (Array.isArray(parsed.workoutHistory)) {
-        const normalized = parsed.workoutHistory
+        const normalized: WorkoutSession[] = parsed.workoutHistory
           .map((s, idx) => {
             const ts =
               s.createdAtMs ||
@@ -563,6 +599,7 @@ export default function App() {
               (acc, it) => acc + ((it.sets || []).length || 0),
               0
             );
+            const rawTab = s.workoutTab || 'imported';
             return {
               id: String(s.id || `sess_${ts}`).slice(0, 80),
               isoDate: String(s.isoDate || new Date(ts).toISOString()),
@@ -570,10 +607,8 @@ export default function App() {
               displayDate: String(
                 s.displayDate || new Date(ts).toLocaleDateString('he-IL')
               ).slice(0, 120),
-              workoutTab: ['workoutA', 'workoutB', 'express', 'all', 'imported'].includes(
-                s.workoutTab
-              )
-                ? s.workoutTab
+              workoutTab: ['workoutA', 'workoutB', 'express', 'all', 'imported'].includes(rawTab)
+                ? rawTab
                 : 'imported',
               workoutTitle: String(s.workoutTitle || 'אימון מיובא').slice(0, 150),
               note: String(s.note || '').slice(0, 500),
@@ -581,7 +616,7 @@ export default function App() {
               items: Array.isArray(s.items) ? s.items.slice(0, 30) : [],
             };
           })
-          .filter((s) => s.items.length > 0);
+          .filter((s) => (s.items || []).length > 0);
 
         setWorkoutHistory(normalized);
         await saveLocalHistory(normalized);
@@ -596,7 +631,7 @@ export default function App() {
       }
       setImportJsonText('');
       setImportModalOpen(false);
-    } catch (e) {
+    } catch {
       setSaveFeedback({ error: true, text: 'הטקסט שהודבק אינו קובץ גיבוי תקין.' });
     }
   };
@@ -608,7 +643,7 @@ export default function App() {
       for (const sess of prevHistory) {
         await saveWorkoutToCloud(user.uid, sess).catch(() => {});
       }
-    } catch (err) {
+    } catch {
       // User closed popup
     }
   };
@@ -618,7 +653,7 @@ export default function App() {
     let weekCount = 0;
     let setsSum = 0;
     sortedHistoryDesc.forEach((s) => {
-      const t = s.createdAtMs || new Date(s.isoDate).getTime();
+      const t = s.createdAtMs || (s.isoDate ? new Date(s.isoDate).getTime() : 0);
       if (t >= sevenDaysAgo) weekCount++;
       (s.items || []).forEach((it) => {
         setsSum += (it.sets || []).length;
@@ -639,7 +674,7 @@ export default function App() {
   const fSemi = fontForWeight('semibold', fontsLoaded);
   const fBold = fontForWeight('bold', fontsLoaded);
 
-  const navTabs = [
+  const navTabs: { key: WorkoutTabKey; label: string; badge?: number }[] = [
     { key: 'workoutA', label: 'אימון בית 1: חזה, גב וזרועות' },
     { key: 'workoutB', label: 'אימון בית 2: כתפיים, גב וזרועות' },
     { key: 'express', label: '⚡ אימון קצר (20 דקות)' },
@@ -657,7 +692,7 @@ export default function App() {
     activeEffectiveSets > 0 ? Math.max(0, Math.min(activeEffectiveSets - 1, currentSetIdx)) : 0;
   const activeSetNum = safeSetIdx + 1;
 
-  const goToExercise = (nextIdx, setIdxOverride = 0) => {
+  const goToExercise = (nextIdx: number, setIdxOverride = 0) => {
     if (visibleExercises.length === 0) return;
     const clamped = Math.max(0, Math.min(visibleExercises.length - 1, nextIdx));
     const targetEx = visibleExercises[clamped];
@@ -703,8 +738,13 @@ export default function App() {
     ? 'סט הבא ←'
     : 'תרגיל הבא ←';
 
+  const currentSetupMessage =
+    currentTab === 'workoutA' || currentTab === 'workoutB' || currentTab === 'express'
+      ? SETUP_MESSAGES[currentTab]
+      : undefined;
+
   // Helper returning completion ratio for an exercise dot/pill
-  const getExerciseDoneStats = (ex) => {
+  const getExerciseDoneStats = (ex: Exercise) => {
     const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
     let doneCount = 0;
     let bestWeightToday = 0;
@@ -991,7 +1031,11 @@ export default function App() {
                       ]}
                     >
                       {allDone ? `${idx + 1} ✓` : `${idx + 1}`}
-                      {isCur ? ` • ${itemEx.muscle}` : doneCount > 0 && !allDone ? ` (${doneCount}/${effectiveSets})` : ''}
+                      {isCur
+                        ? ` • ${itemEx.muscle}`
+                        : doneCount > 0 && !allDone
+                        ? ` (${doneCount}/${effectiveSets})`
+                        : ''}
                     </Text>
                   </Pressable>
                 );
@@ -1004,385 +1048,259 @@ export default function App() {
       {/* NON-SCROLLING FULLSCREEN WORKOUT STAGE (1 exercise & 1 set at a time, capped at page height) */}
       {isWorkoutTab && (
         <View style={styles.fullscreenWorkoutStage}>
-          {activeEx ? (() => {
-            const ex = activeEx;
-            const idx = safeExIdx;
-            const effectiveSets = activeEffectiveSets;
-            const setNum = activeSetNum;
-            const effectiveMode = getEffectiveMode(ex);
-            const exConfigs = getConfigsForExercise(ex);
-            const { bestWeightToday } = getExerciseDoneStats(ex);
-            const entry = getSetEntry(ex, setNum);
-            const setCfg =
-              exConfigs.find((c) => c.totalWeight === entry.weight) || exConfigs[0];
-            const curCfgIdx = exConfigs.findIndex((c) => c.totalWeight === entry.weight);
-            const atMin = curCfgIdx <= 0;
-            const atMax = curCfgIdx >= exConfigs.length - 1;
-            const trendSummary = getExerciseTrendSummary(ex.id, sortedHistoryDesc, colors);
+          {activeEx ? (
+            (() => {
+              const ex = activeEx;
+              const idx = safeExIdx;
+              const effectiveSets = activeEffectiveSets;
+              const setNum = activeSetNum;
+              const effectiveMode = getEffectiveMode(ex);
+              const exConfigs = getConfigsForExercise(ex);
+              const { bestWeightToday } = getExerciseDoneStats(ex);
+              const entry = getSetEntry(ex, setNum);
+              const setCfg =
+                exConfigs.find((c) => c.totalWeight === entry.weight) || exConfigs[0];
+              const curCfgIdx = exConfigs.findIndex((c) => c.totalWeight === entry.weight);
+              const atMin = curCfgIdx <= 0;
+              const atMax = curCfgIdx >= exConfigs.length - 1;
+              const trendSummary = getExerciseTrendSummary(ex.id, sortedHistoryDesc, colors);
 
-            const unitLabel =
-              effectiveMode === 'barbell'
-                ? 'קילוגרם בסך הכל במוט הארוך'
-                : ex.weightUnitLabel;
+              const unitLabel =
+                effectiveMode === 'barbell'
+                  ? 'קילוגרם בסך הכל במוט הארוך'
+                  : ex.weightUnitLabel;
 
-            const renderSingleSetWorkspace = () => (
-              <View style={styles.singleSetWorkspace}>
-                {/* Set Switcher Pills + Optional Barbell Toggle */}
-                <View style={styles.setSwitcherBar}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.setPillsRow}
-                  >
-                    {Array.from({ length: effectiveSets }, (_, i) => i + 1).map((sIdxNum) => {
-                      const sEntry = getSetEntry(ex, sIdxNum);
-                      const isActiveSet = sIdxNum === setNum;
-                      return (
-                        <Pressable
-                          key={sIdxNum}
-                          onPress={() => setCurrentSetIdx(sIdxNum - 1)}
-                          style={[
-                            styles.setSelectorPill,
-                            {
-                              backgroundColor: isActiveSet
-                                ? colors.primary
-                                : sEntry.done
-                                ? colors.successSoft
-                                : colors.background,
-                              borderColor: isActiveSet
-                                ? colors.primary
-                                : sEntry.done
-                                ? colors.success
-                                : colors.border,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.setSelectorPillText,
-                              {
-                                color: isActiveSet
-                                  ? colors.primaryForeground
-                                  : sEntry.done
-                                  ? colors.success
-                                  : colors.foreground,
-                                fontFamily: fBold,
-                              },
-                            ]}
-                          >
-                            {sEntry.done ? `סט ${sIdxNum} ✓` : `סט ${sIdxNum}`}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-
-                  {ex.allowBarbellToggle && (
-                    <View style={styles.modeToggleWrap}>
-                      {[
-                        { id: 'pair', label: '2 משקולות יד' },
-                        { id: 'barbell', label: 'מוט ארוך' },
-                      ].map((opt) => {
-                        const active = effectiveMode === opt.id;
-                        return (
-                          <Pressable
-                            key={opt.id}
-                            onPress={() => setExerciseEquipmentMode(ex, opt.id)}
-                            style={[
-                              styles.modeToggleBtnCompact,
-                              {
-                                backgroundColor: active ? colors.primary : colors.background,
-                                borderColor: active ? colors.primary : colors.border,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.smallBtnText,
-                                {
-                                  color: active ? colors.primaryForeground : colors.foreground,
-                                  fontFamily: fSemi,
-                                },
-                              ]}
-                            >
-                              {opt.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
-
-                {/* Active Set Controls Card (Weight + Reps + Mark Done) */}
-                <View
-                  style={[
-                    styles.activeSetControlBox,
-                    {
-                      backgroundColor: colors.background,
-                      borderColor: entry.done ? colors.success : colors.border,
-                    },
-                  ]}
-                >
-                  <View style={styles.setControlsMainRow}>
-                    {/* Weight Stepper */}
-                    <View style={styles.stepperGroup}>
-                      <Pressable
-                        disabled={atMin}
-                        onPress={() => stepSupportedWeight(ex, setNum, -1)}
-                        style={[
-                          styles.stepperBtn,
-                          {
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                            opacity: atMin ? 0.35 : 1,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.stepperBtnText,
-                            { color: colors.foreground, fontFamily: fBold },
-                          ]}
-                        >
-                          −
-                        </Text>
-                      </Pressable>
-
-                      <View
-                        style={[
-                          styles.weightDisplayPill,
-                          { backgroundColor: colors.card, borderColor: colors.primary },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.smallBtnText,
-                            { color: colors.foreground, fontFamily: fBold },
-                          ]}
-                        >
-                          {entry.weight === 0 ? 'משקל גוף (0)' : `${entry.weight} קילוגרם`}
-                        </Text>
-                      </View>
-
-                      <Pressable
-                        disabled={atMax}
-                        onPress={() => stepSupportedWeight(ex, setNum, 1)}
-                        style={[
-                          styles.stepperBtn,
-                          {
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                            opacity: atMax ? 0.35 : 1,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.stepperBtnText,
-                            { color: colors.foreground, fontFamily: fBold },
-                          ]}
-                        >
-                          +
-                        </Text>
-                      </Pressable>
-                    </View>
-
-                    {/* Reps Stepper */}
-                    <View style={styles.stepperGroup}>
-                      <Pressable
-                        onPress={() => stepReps(ex, setNum, -1)}
-                        style={[
-                          styles.stepperBtn,
-                          { backgroundColor: colors.card, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.stepperBtnText,
-                            { color: colors.foreground, fontFamily: fBold },
-                          ]}
-                        >
-                          −
-                        </Text>
-                      </Pressable>
-                      <TextInput
-                        value={String(entry.reps)}
-                        onChangeText={(txt) => updateRepsText(ex, setNum, txt)}
-                        keyboardType="number-pad"
-                        style={[
-                          styles.stepperInputSmall,
-                          {
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                            color: colors.foreground,
-                            fontFamily: fBold,
-                          },
-                        ]}
-                      />
-                      <Pressable
-                        onPress={() => stepReps(ex, setNum, 1)}
-                        style={[
-                          styles.stepperBtn,
-                          { backgroundColor: colors.card, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.stepperBtnText,
-                            { color: colors.foreground, fontFamily: fBold },
-                          ]}
-                        >
-                          +
-                        </Text>
-                      </Pressable>
-                      <Text
-                        style={[
-                          styles.unitLabel,
-                          { color: colors.mutedForeground, fontFamily: fReg },
-                        ]}
-                      >
-                        חזרות
-                      </Text>
-                    </View>
-
-                    {/* Mark Set Done Button */}
-                    <Pressable
-                      onPress={() => toggleSetDone(ex, setNum)}
-                      style={[
-                        styles.doneBtnCompact,
-                        {
-                          backgroundColor: entry.done ? colors.successSoft : colors.primary,
-                          borderColor: entry.done ? colors.success : colors.primary,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.smallBtnText,
-                          {
-                            color: entry.done ? colors.success : colors.primaryForeground,
-                            fontFamily: fBold,
-                          },
-                        ]}
-                      >
-                        {entry.done ? `סט ${setNum} בוצע ✓` : `סמן סט ${setNum} כבוצע ✓`}
-                      </Text>
-                    </Pressable>
-                  </View>
-
-                  {/* Supported Kilograms Quick Strip + Copy-All */}
-                  <View style={styles.chipsInlineBar}>
+              const renderSingleSetWorkspace = () => (
+                <View style={styles.singleSetWorkspace}>
+                  {/* Set Switcher Pills + Optional Barbell Toggle */}
+                  <View style={styles.setSwitcherBar}>
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.chipsScrollRow}
+                      contentContainerStyle={styles.setPillsRow}
                     >
-                      {exConfigs.map((cfg) => {
-                        const selected = cfg.totalWeight === entry.weight;
+                      {Array.from({ length: effectiveSets }, (_, i) => i + 1).map((sIdxNum) => {
+                        const sEntry = getSetEntry(ex, sIdxNum);
+                        const isActiveSet = sIdxNum === setNum;
                         return (
                           <Pressable
-                            key={cfg.totalWeight}
-                            onPress={() => selectWeightForSet(ex, setNum, cfg.totalWeight)}
+                            key={sIdxNum}
+                            onPress={() => setCurrentSetIdx(sIdxNum - 1)}
                             style={[
-                              styles.weightOptionChipCompact,
+                              styles.setSelectorPill,
                               {
-                                backgroundColor: selected ? colors.primary : colors.card,
-                                borderColor: selected ? colors.primary : colors.border,
+                                backgroundColor: isActiveSet
+                                  ? colors.primary
+                                  : sEntry.done
+                                  ? colors.successSoft
+                                  : colors.background,
+                                borderColor: isActiveSet
+                                  ? colors.primary
+                                  : sEntry.done
+                                  ? colors.success
+                                  : colors.border,
                               },
                             ]}
                           >
                             <Text
                               style={[
-                                styles.smallBtnText,
+                                styles.setSelectorPillText,
                                 {
-                                  color: selected
+                                  color: isActiveSet
                                     ? colors.primaryForeground
+                                    : sEntry.done
+                                    ? colors.success
                                     : colors.foreground,
-                                  fontFamily: selected ? fBold : fMed,
+                                  fontFamily: fBold,
                                 },
                               ]}
                             >
-                              {cfg.totalWeight === 0 ? '0 (גוף)' : `${cfg.totalWeight}`}
+                              {sEntry.done ? `סט ${sIdxNum} ✓` : `סט ${sIdxNum}`}
                             </Text>
                           </Pressable>
                         );
                       })}
                     </ScrollView>
 
-                    {effectiveSets > 1 && (
-                      <Pressable
-                        onPress={() => selectWeightForExercise(ex, entry.weight)}
-                        style={[
-                          styles.copyAllSetsBtn,
-                          { backgroundColor: colors.card, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.copyAllSetsText,
-                            { color: colors.primary, fontFamily: fSemi },
-                          ]}
-                        >
-                          לכל הסטים ({unitLabel.includes('ארוך') ? 'מוט' : 'סט'})
-                        </Text>
-                      </Pressable>
+                    {ex.allowBarbellToggle && (
+                      <View style={styles.modeToggleWrap}>
+                        {(
+                          [
+                            { id: 'pair', label: '2 משקולות יד' },
+                            { id: 'barbell', label: 'מוט ארוך' },
+                          ] as { id: EquipmentMode; label: string }[]
+                        ).map((opt) => {
+                          const active = effectiveMode === opt.id;
+                          return (
+                            <Pressable
+                              key={opt.id}
+                              onPress={() => setExerciseEquipmentMode(ex, opt.id)}
+                              style={[
+                                styles.modeToggleBtnCompact,
+                                {
+                                  backgroundColor: active ? colors.primary : colors.background,
+                                  borderColor: active ? colors.primary : colors.border,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.smallBtnText,
+                                  {
+                                    color: active ? colors.primaryForeground : colors.foreground,
+                                    fontFamily: fSemi,
+                                  },
+                                ]}
+                              >
+                                {opt.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
                     )}
                   </View>
-                </View>
 
-                {/* Live Animated Plate Build SVG (Scales cleanly to fit height!) */}
-                <EquipmentBuildDiagram
-                  compact
-                  cfg={setCfg}
-                  mode={effectiveMode}
-                  paused={animPaused}
-                  colors={colors}
-                  fontsLoaded={fontsLoaded}
-                />
-
-                {/* Plate Setup Recipe */}
-                <View
-                  style={[
-                    styles.plateRecipeBarCompact,
-                    { backgroundColor: colors.background, borderColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    numberOfLines={2}
+                  {/* Active Set Controls Card (Weight + Reps + Mark Done) */}
+                  <View
                     style={[
-                      styles.plateRecipeTextCompact,
-                      { color: colors.foreground, fontFamily: fMed },
+                      styles.activeSetControlBox,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: entry.done ? colors.success : colors.border,
+                      },
                     ]}
                   >
-                    🔩{' '}
-                    <Text style={{ color: colors.primary, fontFamily: fBold }}>
-                      איך מרכיבים {setCfg.totalWeight} קילוגרם:{' '}
-                    </Text>
-                    {describeConfigSetup(setCfg, effectiveMode)}
-                  </Text>
-                </View>
-              </View>
-            );
+                    <View style={styles.setControlsMainRow}>
+                      {/* Weight Stepper */}
+                      <View style={styles.stepperGroup}>
+                        <Pressable
+                          disabled={atMin}
+                          onPress={() => stepSupportedWeight(ex, setNum, -1)}
+                          style={[
+                            styles.stepperBtn,
+                            {
+                              backgroundColor: colors.card,
+                              borderColor: colors.border,
+                              opacity: atMin ? 0.35 : 1,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.stepperBtnText,
+                              { color: colors.foreground, fontFamily: fBold },
+                            ]}
+                          >
+                            −
+                          </Text>
+                        </Pressable>
 
-            const renderExerciseGuidancePane = () => (
-              <View style={styles.guidancePane}>
-                {/* Sub-toggle between Movement Animation+Videos and Step-by-Step+Safety */}
-                <View style={styles.guidanceToggleRow}>
-                  {[
-                    { id: 'demo', label: '🎬 הדגמה וסרטונים' },
-                    { id: 'steps', label: '📋 שלבי ביצוע וטיפים' },
-                  ].map((paneOpt) => {
-                    const active = infoSubPane === paneOpt.id;
-                    return (
+                        <View
+                          style={[
+                            styles.weightDisplayPill,
+                            { backgroundColor: colors.card, borderColor: colors.primary },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.smallBtnText,
+                              { color: colors.foreground, fontFamily: fBold },
+                            ]}
+                          >
+                            {entry.weight === 0 ? 'משקל גוף (0)' : `${entry.weight} קילוגרם`}
+                          </Text>
+                        </View>
+
+                        <Pressable
+                          disabled={atMax}
+                          onPress={() => stepSupportedWeight(ex, setNum, 1)}
+                          style={[
+                            styles.stepperBtn,
+                            {
+                              backgroundColor: colors.card,
+                              borderColor: colors.border,
+                              opacity: atMax ? 0.35 : 1,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.stepperBtnText,
+                              { color: colors.foreground, fontFamily: fBold },
+                            ]}
+                          >
+                            +
+                          </Text>
+                        </Pressable>
+                      </View>
+
+                      {/* Reps Stepper */}
+                      <View style={styles.stepperGroup}>
+                        <Pressable
+                          onPress={() => stepReps(ex, setNum, -1)}
+                          style={[
+                            styles.stepperBtn,
+                            { backgroundColor: colors.card, borderColor: colors.border },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.stepperBtnText,
+                              { color: colors.foreground, fontFamily: fBold },
+                            ]}
+                          >
+                            −
+                          </Text>
+                        </Pressable>
+                        <TextInput
+                          value={String(entry.reps)}
+                          onChangeText={(txt) => updateRepsText(ex, setNum, txt)}
+                          keyboardType="number-pad"
+                          style={[
+                            styles.stepperInputSmall,
+                            {
+                              backgroundColor: colors.card,
+                              borderColor: colors.border,
+                              color: colors.foreground,
+                              fontFamily: fBold,
+                            },
+                          ]}
+                        />
+                        <Pressable
+                          onPress={() => stepReps(ex, setNum, 1)}
+                          style={[
+                            styles.stepperBtn,
+                            { backgroundColor: colors.card, borderColor: colors.border },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.stepperBtnText,
+                              { color: colors.foreground, fontFamily: fBold },
+                            ]}
+                          >
+                            +
+                          </Text>
+                        </Pressable>
+                        <Text
+                          style={[
+                            styles.unitLabel,
+                            { color: colors.mutedForeground, fontFamily: fReg },
+                          ]}
+                        >
+                          חזרות
+                        </Text>
+                      </View>
+
+                      {/* Mark Set Done Button */}
                       <Pressable
-                        key={paneOpt.id}
-                        onPress={() => setInfoSubPane(paneOpt.id)}
+                        onPress={() => toggleSetDone(ex, setNum)}
                         style={[
-                          styles.guidanceToggleBtn,
+                          styles.doneBtnCompact,
                           {
-                            backgroundColor: active ? colors.primary : colors.background,
-                            borderColor: active ? colors.primary : colors.border,
+                            backgroundColor: entry.done ? colors.successSoft : colors.primary,
+                            borderColor: entry.done ? colors.success : colors.primary,
                           },
                         ]}
                       >
@@ -1390,321 +1308,461 @@ export default function App() {
                           style={[
                             styles.smallBtnText,
                             {
-                              color: active ? colors.primaryForeground : colors.foreground,
-                              fontFamily: fSemi,
+                              color: entry.done ? colors.success : colors.primaryForeground,
+                              fontFamily: fBold,
                             },
                           ]}
                         >
-                          {paneOpt.label}
+                          {entry.done ? `סט ${setNum} בוצע ✓` : `סמן סט ${setNum} כבוצע ✓`}
                         </Text>
                       </Pressable>
-                    );
-                  })}
-                </View>
+                    </View>
 
-                {infoSubPane === 'demo' ? (
-                  <View style={styles.guidanceContentCol}>
-                    <ExerciseAnimation
-                      compact
-                      exercise={ex}
-                      paused={animPaused}
-                      colors={colors}
-                      fontsLoaded={fontsLoaded}
-                    />
-                    <View style={styles.videosRow}>
-                      {ex.videos.map((v) => (
+                    {/* Supported Kilograms Quick Strip + Copy-All */}
+                    <View style={styles.chipsInlineBar}>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.chipsScrollRow}
+                      >
+                        {exConfigs.map((cfg) => {
+                          const selected = cfg.totalWeight === entry.weight;
+                          return (
+                            <Pressable
+                              key={cfg.totalWeight}
+                              onPress={() => selectWeightForSet(ex, setNum, cfg.totalWeight)}
+                              style={[
+                                styles.weightOptionChipCompact,
+                                {
+                                  backgroundColor: selected ? colors.primary : colors.card,
+                                  borderColor: selected ? colors.primary : colors.border,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.smallBtnText,
+                                  {
+                                    color: selected
+                                      ? colors.primaryForeground
+                                      : colors.foreground,
+                                    fontFamily: selected ? fBold : fMed,
+                                  },
+                                ]}
+                              >
+                                {cfg.totalWeight === 0 ? '0 (גוף)' : `${cfg.totalWeight}`}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+
+                      {effectiveSets > 1 && (
                         <Pressable
-                          key={v.url}
-                          onPress={() => Linking.openURL(v.url)}
+                          onPress={() => selectWeightForExercise(ex, entry.weight)}
                           style={[
-                            styles.videoBtnCompact,
-                            { backgroundColor: colors.secondary, borderColor: colors.border },
+                            styles.copyAllSetsBtn,
+                            { backgroundColor: colors.card, borderColor: colors.border },
                           ]}
                         >
                           <Text
-                            numberOfLines={1}
                             style={[
-                              styles.smallBtnText,
-                              { color: colors.secondaryForeground, fontFamily: fSemi },
+                              styles.copyAllSetsText,
+                              { color: colors.primary, fontFamily: fSemi },
                             ]}
                           >
-                            🎬 {v.label} ↗
+                            לכל הסטים ({unitLabel.includes('ארוך') ? 'מוט' : 'סט'})
                           </Text>
                         </Pressable>
-                      ))}
+                      )}
                     </View>
                   </View>
-                ) : (
+
+                  {/* Live Animated Plate Build SVG (Scales cleanly to fit height!) */}
+                  <EquipmentBuildDiagram
+                    compact
+                    cfg={setCfg}
+                    mode={effectiveMode}
+                    paused={animPaused}
+                    colors={colors}
+                    fontsLoaded={fontsLoaded}
+                  />
+
+                  {/* Plate Setup Recipe */}
                   <View
                     style={[
-                      styles.stepsFitCard,
+                      styles.plateRecipeBarCompact,
                       { backgroundColor: colors.background, borderColor: colors.border },
                     ]}
                   >
-                    <View style={{ gap: 6 }}>
-                      {ex.steps.map((st, sIdx) => (
-                        <View key={sIdx} style={styles.stepRow}>
-                          <View
-                            style={[
-                              styles.stepNumCircle,
-                              { backgroundColor: colors.secondary },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.stepNumText,
-                                { color: colors.secondaryForeground, fontFamily: fBold },
-                              ]}
-                            >
-                              {sIdx + 1}
-                            </Text>
-                          </View>
-                          <Text
-                            style={[
-                              styles.stepBodyTextCompact,
-                              { color: colors.foreground, fontFamily: fReg },
-                            ]}
-                          >
-                            {st}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-
-                    <View style={styles.tipsFooterRow}>
-                      <View
-                        style={[
-                          styles.tipCompactBox,
-                          { backgroundColor: colors.card, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.subCardText,
-                            { color: colors.mutedForeground, fontFamily: fReg },
-                          ]}
-                        >
-                          <Text style={{ color: colors.success, fontFamily: fBold }}>
-                            💡 למה זה טוב:{' '}
-                          </Text>
-                          {ex.homeTip}
-                        </Text>
-                      </View>
-                      <View
-                        style={[
-                          styles.tipCompactBox,
-                          { backgroundColor: colors.card, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.subCardText,
-                            { color: colors.mutedForeground, fontFamily: fReg },
-                          ]}
-                        >
-                          <Text style={{ color: colors.danger, fontFamily: fBold }}>
-                            ⚠️ ממה להיזהר:{' '}
-                          </Text>
-                          {ex.avoid}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                )}
-              </View>
-            );
-
-            return (
-              <View
-                key={ex.id}
-                style={[
-                  styles.fullscreenExCard,
-                  { backgroundColor: colors.card, borderColor: colors.border },
-                ]}
-              >
-                {/* Compact Single-Line Exercise Header */}
-                <View style={[styles.exHeaderCompact, { borderBottomColor: colors.border }]}>
-                  <View style={styles.exHeaderTitleGroup}>
-                    <View style={[styles.indexBadge, { backgroundColor: colors.primary }]}>
-                      <Text
-                        style={[
-                          styles.indexBadgeText,
-                          { color: colors.primaryForeground, fontFamily: fBold },
-                        ]}
-                      >
-                        {idx + 1}
+                    <Text
+                      numberOfLines={2}
+                      style={[
+                        styles.plateRecipeTextCompact,
+                        { color: colors.foreground, fontFamily: fMed },
+                      ]}
+                    >
+                      🔩{' '}
+                      <Text style={{ color: colors.primary, fontFamily: fBold }}>
+                        איך מרכיבים {setCfg.totalWeight} קילוגרם:{' '}
                       </Text>
-                    </View>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.exTitleCompact, { color: colors.foreground, fontFamily: fBold }]}
-                      >
-                        {ex.name}
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={[
-                          styles.exMetaCompact,
-                          { color: colors.mutedForeground, fontFamily: fReg },
-                        ]}
-                      >
-                        {ex.muscle} • {effectiveSets} סטים × {ex.reps} • {ex.equipment}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={[styles.pillBadge, { backgroundColor: colors.primarySoft }]}>
-                    <Text style={[styles.pillBadgeText, { color: colors.primary, fontFamily: fBold }]}>
-                      סט {setNum} מתוך {effectiveSets}
+                      {describeConfigSetup(setCfg, effectiveMode)}
                     </Text>
                   </View>
                 </View>
+              );
 
-                {isWide ? (
-                  <>
-                    {/* Desktop Wide: Compact Last Time & Trend Card + Side-by-Side Workspace */}
-                    <ExerciseTrendCard
-                      compact
-                      exerciseId={ex.id}
-                      workoutHistory={sortedHistoryDesc}
-                      liveBestWeight={bestWeightToday}
-                      colors={colors}
-                      fontsLoaded={fontsLoaded}
-                    />
-                    <View style={styles.exBodyGridWideFull}>
-                      <View style={styles.exGuidanceColWide}>{renderExerciseGuidancePane()}</View>
-                      <View style={styles.exSetColWide}>{renderSingleSetWorkspace()}</View>
-                    </View>
-                  </>
-                ) : (
-                  <>
-                    {/* Mobile Compact: 1-Line Clickable Trend Strip + 3-Tab Switcher + Active Pane */}
-                    <Pressable
-                      onPress={() => setMobilePane('trend')}
-                      style={[
-                        styles.mobileTrendBanner,
-                        { backgroundColor: trendSummary.trendBg, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        numberOfLines={1}
-                        style={[
-                          styles.mobileTrendText,
-                          { color: trendSummary.trendFg, fontFamily: fSemi },
-                        ]}
-                      >
-                        {trendSummary.shortLine}
-                      </Text>
-                    </Pressable>
-
-                    <View style={styles.mobilePaneTabsRow}>
-                      {[
-                        { id: 'set', label: `🏋️ סט ${setNum} והרכבה` },
-                        { id: 'demo', label: '🎬 הדגמה והסבר' },
-                        { id: 'trend', label: '📈 מגמה וסטים' },
-                      ].map((tabItem) => {
-                        const active = mobilePane === tabItem.id;
-                        return (
-                          <Pressable
-                            key={tabItem.id}
-                            onPress={() => setMobilePane(tabItem.id)}
+              const renderExerciseGuidancePane = () => (
+                <View style={styles.guidancePane}>
+                  {/* Sub-toggle between Movement Animation+Videos and Step-by-Step+Safety */}
+                  <View style={styles.guidanceToggleRow}>
+                    {(
+                      [
+                        { id: 'demo', label: '🎬 הדגמה וסרטונים' },
+                        { id: 'steps', label: '📋 שלבי ביצוע וטיפים' },
+                      ] as { id: 'demo' | 'steps'; label: string }[]
+                    ).map((paneOpt) => {
+                      const active = infoSubPane === paneOpt.id;
+                      return (
+                        <Pressable
+                          key={paneOpt.id}
+                          onPress={() => setInfoSubPane(paneOpt.id)}
+                          style={[
+                            styles.guidanceToggleBtn,
+                            {
+                              backgroundColor: active ? colors.primary : colors.background,
+                              borderColor: active ? colors.primary : colors.border,
+                            },
+                          ]}
+                        >
+                          <Text
                             style={[
-                              styles.mobilePaneTabBtn,
+                              styles.smallBtnText,
                               {
-                                backgroundColor: active ? colors.primary : colors.background,
-                                borderColor: active ? colors.primary : colors.border,
+                                color: active ? colors.primaryForeground : colors.foreground,
+                                fontFamily: fSemi,
                               },
+                            ]}
+                          >
+                            {paneOpt.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {infoSubPane === 'demo' ? (
+                    <View style={styles.guidanceContentCol}>
+                      <ExerciseAnimation
+                        compact
+                        exercise={ex}
+                        paused={animPaused}
+                        colors={colors}
+                        fontsLoaded={fontsLoaded}
+                      />
+                      <View style={styles.videosRow}>
+                        {ex.videos.map((v) => (
+                          <Pressable
+                            key={v.url}
+                            onPress={() => Linking.openURL(v.url)}
+                            style={[
+                              styles.videoBtnCompact,
+                              { backgroundColor: colors.secondary, borderColor: colors.border },
                             ]}
                           >
                             <Text
                               numberOfLines={1}
                               style={[
-                                styles.mobilePaneTabText,
+                                styles.smallBtnText,
+                                { color: colors.secondaryForeground, fontFamily: fSemi },
+                              ]}
+                            >
+                              🎬 {v.label} ↗
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.stepsFitCard,
+                        { backgroundColor: colors.background, borderColor: colors.border },
+                      ]}
+                    >
+                      <View style={{ gap: 6 }}>
+                        {ex.steps.map((st, sIdx) => (
+                          <View key={sIdx} style={styles.stepRow}>
+                            <View
+                              style={[
+                                styles.stepNumCircle,
+                                { backgroundColor: colors.secondary },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.stepNumText,
+                                  { color: colors.secondaryForeground, fontFamily: fBold },
+                                ]}
+                              >
+                                {sIdx + 1}
+                              </Text>
+                            </View>
+                            <Text
+                              style={[
+                                styles.stepBodyTextCompact,
+                                { color: colors.foreground, fontFamily: fReg },
+                              ]}
+                            >
+                              {st}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+
+                      <View style={styles.tipsFooterRow}>
+                        <View
+                          style={[
+                            styles.tipCompactBox,
+                            { backgroundColor: colors.card, borderColor: colors.border },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.subCardText,
+                              { color: colors.mutedForeground, fontFamily: fReg },
+                            ]}
+                          >
+                            <Text style={{ color: colors.success, fontFamily: fBold }}>
+                              💡 למה זה טוב:{' '}
+                            </Text>
+                            {ex.homeTip}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.tipCompactBox,
+                            { backgroundColor: colors.card, borderColor: colors.border },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.subCardText,
+                              { color: colors.mutedForeground, fontFamily: fReg },
+                            ]}
+                          >
+                            <Text style={{ color: colors.danger, fontFamily: fBold }}>
+                              ⚠️ ממה להיזהר:{' '}
+                            </Text>
+                            {ex.avoid}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+
+              return (
+                <View
+                  key={ex.id}
+                  style={[
+                    styles.fullscreenExCard,
+                    { backgroundColor: colors.card, borderColor: colors.border },
+                  ]}
+                >
+                  {/* Compact Single-Line Exercise Header */}
+                  <View style={[styles.exHeaderCompact, { borderBottomColor: colors.border }]}>
+                    <View style={styles.exHeaderTitleGroup}>
+                      <View style={[styles.indexBadge, { backgroundColor: colors.primary }]}>
+                        <Text
+                          style={[
+                            styles.indexBadgeText,
+                            { color: colors.primaryForeground, fontFamily: fBold },
+                          ]}
+                        >
+                          {idx + 1}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.exTitleCompact, { color: colors.foreground, fontFamily: fBold }]}
+                        >
+                          {ex.name}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.exMetaCompact,
+                            { color: colors.mutedForeground, fontFamily: fReg },
+                          ]}
+                        >
+                          {ex.muscle} • {effectiveSets} סטים × {ex.reps} • {ex.equipment}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.pillBadge, { backgroundColor: colors.primarySoft }]}>
+                      <Text style={[styles.pillBadgeText, { color: colors.primary, fontFamily: fBold }]}>
+                        סט {setNum} מתוך {effectiveSets}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {isWide ? (
+                    <>
+                      {/* Desktop Wide: Compact Last Time & Trend Card + Side-by-Side Workspace */}
+                      <ExerciseTrendCard
+                        compact
+                        exerciseId={ex.id}
+                        workoutHistory={sortedHistoryDesc}
+                        liveBestWeight={bestWeightToday}
+                        colors={colors}
+                        fontsLoaded={fontsLoaded}
+                      />
+                      <View style={styles.exBodyGridWideFull}>
+                        <View style={styles.exGuidanceColWide}>{renderExerciseGuidancePane()}</View>
+                        <View style={styles.exSetColWide}>{renderSingleSetWorkspace()}</View>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      {/* Mobile Compact: 1-Line Clickable Trend Strip + 3-Tab Switcher + Active Pane */}
+                      <Pressable
+                        onPress={() => setMobilePane('trend')}
+                        style={[
+                          styles.mobileTrendBanner,
+                          { backgroundColor: trendSummary.trendBg, borderColor: colors.border },
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.mobileTrendText,
+                            { color: trendSummary.trendFg, fontFamily: fSemi },
+                          ]}
+                        >
+                          {trendSummary.shortLine}
+                        </Text>
+                      </Pressable>
+
+                      <View style={styles.mobilePaneTabsRow}>
+                        {(
+                          [
+                            { id: 'set', label: `🏋️ סט ${setNum} והרכבה` },
+                            { id: 'demo', label: '🎬 הדגמה והסבר' },
+                            { id: 'trend', label: '📈 מגמה וסטים' },
+                          ] as { id: 'set' | 'demo' | 'trend'; label: string }[]
+                        ).map((tabItem) => {
+                          const active = mobilePane === tabItem.id;
+                          return (
+                            <Pressable
+                              key={tabItem.id}
+                              onPress={() => setMobilePane(tabItem.id)}
+                              style={[
+                                styles.mobilePaneTabBtn,
                                 {
-                                  color: active ? colors.primaryForeground : colors.foreground,
-                                  fontFamily: fSemi,
+                                  backgroundColor: active ? colors.primary : colors.background,
+                                  borderColor: active ? colors.primary : colors.border,
                                 },
                               ]}
                             >
-                              {tabItem.label}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                              <Text
+                                numberOfLines={1}
+                                style={[
+                                  styles.mobilePaneTabText,
+                                  {
+                                    color: active ? colors.primaryForeground : colors.foreground,
+                                    fontFamily: fSemi,
+                                  },
+                                ]}
+                              >
+                                {tabItem.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
 
-                    <View style={styles.flexOne}>
-                      {mobilePane === 'set' && renderSingleSetWorkspace()}
-                      {mobilePane === 'demo' && renderExerciseGuidancePane()}
-                      {mobilePane === 'trend' && (
-                        <View style={styles.mobileTrendPaneWrap}>
-                          <ExerciseTrendCard
-                            exerciseId={ex.id}
-                            workoutHistory={sortedHistoryDesc}
-                            liveBestWeight={bestWeightToday}
-                            colors={colors}
-                            fontsLoaded={fontsLoaded}
-                          />
-                          <View
-                            style={[
-                              styles.subCard,
-                              { backgroundColor: colors.background, borderColor: colors.border },
-                            ]}
-                          >
-                            <Text
+                      <View style={styles.flexOne}>
+                        {mobilePane === 'set' && renderSingleSetWorkspace()}
+                        {mobilePane === 'demo' && renderExerciseGuidancePane()}
+                        {mobilePane === 'trend' && (
+                          <View style={styles.mobileTrendPaneWrap}>
+                            <ExerciseTrendCard
+                              exerciseId={ex.id}
+                              workoutHistory={sortedHistoryDesc}
+                              liveBestWeight={bestWeightToday}
+                              colors={colors}
+                              fontsLoaded={fontsLoaded}
+                            />
+                            <View
                               style={[
-                                styles.subCardTitle,
-                                { color: colors.foreground, fontFamily: fBold },
+                                styles.subCard,
+                                { backgroundColor: colors.background, borderColor: colors.border },
                               ]}
                             >
-                              סיכום הסטים שלך בתרגיל זה (לחיצה מעבירה לסט):
-                            </Text>
-                            <View style={styles.filterRow}>
-                              {Array.from({ length: effectiveSets }, (_, i) => i + 1).map((sIdxNum) => {
-                                const sEntry = getSetEntry(ex, sIdxNum);
-                                return (
-                                  <Pressable
-                                    key={sIdxNum}
-                                    onPress={() => {
-                                      setCurrentSetIdx(sIdxNum - 1);
-                                      setMobilePane('set');
-                                    }}
-                                    style={[
-                                      styles.filterChipCompact,
-                                      {
-                                        backgroundColor: sEntry.done
-                                          ? colors.successSoft
-                                          : colors.card,
-                                        borderColor: sEntry.done ? colors.success : colors.border,
-                                      },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.smallBtnText,
-                                        {
-                                          color: sEntry.done ? colors.success : colors.foreground,
-                                          fontFamily: fSemi,
-                                        },
-                                      ]}
-                                    >
-                                      סט {sIdxNum}: {sEntry.weight} קילוגרם × {sEntry.reps}{' '}
-                                      {sEntry.done ? '✓' : ''}
-                                    </Text>
-                                  </Pressable>
-                                );
-                              })}
+                              <Text
+                                style={[
+                                  styles.subCardTitle,
+                                  { color: colors.foreground, fontFamily: fBold },
+                                ]}
+                              >
+                                סיכום הסטים שלך בתרגיל זה (לחיצה מעבירה לסט):
+                              </Text>
+                              <View style={styles.filterRow}>
+                                {Array.from({ length: effectiveSets }, (_, i) => i + 1).map(
+                                  (sIdxNum) => {
+                                    const sEntry = getSetEntry(ex, sIdxNum);
+                                    return (
+                                      <Pressable
+                                        key={sIdxNum}
+                                        onPress={() => {
+                                          setCurrentSetIdx(sIdxNum - 1);
+                                          setMobilePane('set');
+                                        }}
+                                        style={[
+                                          styles.filterChipCompact,
+                                          {
+                                            backgroundColor: sEntry.done
+                                              ? colors.successSoft
+                                              : colors.card,
+                                            borderColor: sEntry.done
+                                              ? colors.success
+                                              : colors.border,
+                                          },
+                                        ]}
+                                      >
+                                        <Text
+                                          style={[
+                                            styles.smallBtnText,
+                                            {
+                                              color: sEntry.done
+                                                ? colors.success
+                                                : colors.foreground,
+                                              fontFamily: fSemi,
+                                            },
+                                          ]}
+                                        >
+                                          סט {sIdxNum}: {sEntry.weight} קילוגרם × {sEntry.reps}{' '}
+                                          {sEntry.done ? '✓' : ''}
+                                        </Text>
+                                      </Pressable>
+                                    );
+                                  }
+                                )}
+                              </View>
                             </View>
                           </View>
-                        </View>
-                      )}
-                    </View>
-                  </>
-                )}
-              </View>
-            );
-          })() : (
+                        )}
+                      </View>
+                    </>
+                  )}
+                </View>
+              );
+            })()
+          ) : (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
                 לא נמצאו תרגילים בסינון הנוכחי. בחר קבוצת שריר אחרת למעלה.
@@ -1722,337 +1780,312 @@ export default function App() {
           contentContainerStyle={styles.scrollContent}
         >
           <View style={styles.maxWidthWrap}>
-
-          {/* PROGRESS & ANALYTICS SECTION */}
-          {currentTab === 'progress' && (
-            <View style={{ gap: 16 }}>
-              <View style={[styles.statsGrid, isWide && styles.statsGridWide]}>
-                <View
-                  style={[
-                    styles.card,
-                    styles.statCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
-                >
-                  <Text
+            {/* PROGRESS & ANALYTICS SECTION */}
+            {currentTab === 'progress' && (
+              <View style={{ gap: 16 }}>
+                <View style={[styles.statsGrid, isWide && styles.statsGridWide]}>
+                  <View
                     style={[
-                      styles.subCardText,
-                      { color: colors.mutedForeground, fontFamily: fReg },
+                      styles.card,
+                      styles.statCard,
+                      { backgroundColor: colors.card, borderColor: colors.border },
                     ]}
                   >
-                    אימונים ששמרת ביומן
-                  </Text>
-                  <Text style={[styles.statBigNum, { color: colors.foreground, fontFamily: fBold }]}>
-                    {progressStats.totalWorkouts}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.card,
-                    styles.statCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.subCardText,
-                      { color: colors.mutedForeground, fontFamily: fReg },
-                    ]}
-                  >
-                    אימונים ב-7 הימים האחרונים
-                  </Text>
-                  <Text style={[styles.statBigNum, { color: colors.primary, fontFamily: fBold }]}>
-                    {progressStats.weekWorkouts}
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.card,
-                    styles.statCard,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.subCardText,
-                      { color: colors.mutedForeground, fontFamily: fReg },
-                    ]}
-                  >
-                    סך הכל סטים שביצעת
-                  </Text>
-                  <Text style={[styles.statBigNum, { color: colors.foreground, fontFamily: fBold }]}>
-                    {progressStats.totalSets}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Chart Card */}
-              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  📊 גרף התקדמות במשקלים לפי תרגיל
-                </Text>
-                <Text
-                  style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
-                >
-                  בחר תרגיל כדי לראות איך המשקל המקסימלי שלך בו עולה מאימון לאימון:
-                </Text>
-
-                <View style={styles.filterRow}>
-                  {EXERCISES.map((ex, i) => {
-                    const active = chartExerciseId === ex.id;
-                    return (
-                      <Pressable
-                        key={ex.id}
-                        onPress={() => setChartExerciseId(ex.id)}
-                        style={[
-                          styles.filterChip,
-                          {
-                            backgroundColor: active ? colors.primary : colors.background,
-                            borderColor: active ? colors.primary : colors.border,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.smallBtnText,
-                            {
-                              color: active ? colors.primaryForeground : colors.foreground,
-                              fontFamily: fMed,
-                            },
-                          ]}
-                        >
-                          {i + 1}. {ex.name}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <ProgressChart
-                  exerciseId={chartExerciseId}
-                  workoutHistory={sortedHistoryDesc}
-                  colors={colors}
-                  fontsLoaded={fontsLoaded}
-                />
-              </View>
-
-              {/* Workout Log + Backup */}
-              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View
-                  style={[
-                    styles.rowBetween,
-                    {
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.border,
-                      paddingBottom: 12,
-                    },
-                  ]}
-                >
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text
-                      style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}
-                    >
-                      🗓️ יומן האימונים שלך
-                    </Text>
                     <Text
                       style={[
                         styles.subCardText,
                         { color: colors.mutedForeground, fontFamily: fReg },
                       ]}
                     >
-                      {syncStatus.message}
+                      אימונים ששמרת ביומן
+                    </Text>
+                    <Text style={[styles.statBigNum, { color: colors.foreground, fontFamily: fBold }]}>
+                      {progressStats.totalWorkouts}
                     </Text>
                   </View>
-                  <View style={styles.setupActionsRow}>
-                    <Pressable
-                      onPress={handleExportBackup}
-                      style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
-                    >
-                      <Text
-                        style={[
-                          styles.smallBtnText,
-                          { color: colors.secondaryForeground, fontFamily: fSemi },
-                        ]}
-                      >
-                        ⬇️ גיבוי נתונים
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setImportModalOpen((o) => !o)}
-                      style={[
-                        styles.outlineBtn,
-                        { backgroundColor: colors.background, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fSemi }]}
-                      >
-                        ⬆️ שחזור מגיבוי
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                {importModalOpen && (
                   <View
                     style={[
-                      styles.subCard,
-                      { backgroundColor: colors.background, borderColor: colors.border, gap: 8 },
+                      styles.card,
+                      styles.statCard,
+                      { backgroundColor: colors.card, borderColor: colors.border },
                     ]}
                   >
                     <Text
-                      style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                    >
-                      הדבק תוכן קובץ גיבוי (JSON):
-                    </Text>
-                    <TextInput
-                      value={importJsonText}
-                      onChangeText={setImportJsonText}
-                      multiline
-                      numberOfLines={4}
-                      placeholder='{"workoutHistory": [...]}'
-                      placeholderTextColor={colors.mutedForeground}
                       style={[
-                        styles.noteInput,
-                        {
-                          minHeight: 90,
-                          backgroundColor: colors.card,
-                          borderColor: colors.border,
-                          color: colors.foreground,
-                          fontFamily: fReg,
-                        },
+                        styles.subCardText,
+                        { color: colors.mutedForeground, fontFamily: fReg },
                       ]}
-                    />
+                    >
+                      אימונים ב-7 הימים האחרונים
+                    </Text>
+                    <Text style={[styles.statBigNum, { color: colors.primary, fontFamily: fBold }]}>
+                      {progressStats.weekWorkouts}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.card,
+                      styles.statCard,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.subCardText,
+                        { color: colors.mutedForeground, fontFamily: fReg },
+                      ]}
+                    >
+                      סך הכל סטים שביצעת
+                    </Text>
+                    <Text style={[styles.statBigNum, { color: colors.foreground, fontFamily: fBold }]}>
+                      {progressStats.totalSets}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Chart Card */}
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                    📊 גרף התקדמות במשקלים לפי תרגיל
+                  </Text>
+                  <Text
+                    style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
+                  >
+                    בחר תרגיל כדי לראות איך המשקל המקסימלי שלך בו עולה מאימון לאימון:
+                  </Text>
+
+                  <View style={styles.filterRow}>
+                    {EXERCISES.map((ex, i) => {
+                      const active = chartExerciseId === ex.id;
+                      return (
+                        <Pressable
+                          key={ex.id}
+                          onPress={() => setChartExerciseId(ex.id)}
+                          style={[
+                            styles.filterChip,
+                            {
+                              backgroundColor: active ? colors.primary : colors.background,
+                              borderColor: active ? colors.primary : colors.border,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.smallBtnText,
+                              {
+                                color: active ? colors.primaryForeground : colors.foreground,
+                                fontFamily: fMed,
+                              },
+                            ]}
+                          >
+                            {i + 1}. {ex.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  <ProgressChart
+                    exerciseId={chartExerciseId}
+                    workoutHistory={sortedHistoryDesc}
+                    colors={colors}
+                    fontsLoaded={fontsLoaded}
+                  />
+                </View>
+
+                {/* Workout Log + Backup */}
+                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View
+                    style={[
+                      styles.rowBetween,
+                      {
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.border,
+                        paddingBottom: 12,
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1, gap: 3 }}>
+                      <Text
+                        style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}
+                      >
+                        🗓️ יומן האימונים שלך
+                      </Text>
+                      <Text
+                        style={[
+                          styles.subCardText,
+                          { color: colors.mutedForeground, fontFamily: fReg },
+                        ]}
+                      >
+                        {syncStatus.message}
+                      </Text>
+                    </View>
                     <View style={styles.setupActionsRow}>
                       <Pressable
-                        onPress={handleApplyImportJson}
-                        style={[styles.primarySmallBtn, { backgroundColor: colors.primary }]}
+                        onPress={handleExportBackup}
+                        style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
                       >
                         <Text
                           style={[
                             styles.smallBtnText,
-                            { color: colors.primaryForeground, fontFamily: fBold },
+                            { color: colors.secondaryForeground, fontFamily: fSemi },
                           ]}
                         >
-                          טען גיבוי
+                          ⬇️ גיבוי נתונים
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setImportModalOpen((o) => !o)}
+                        style={[
+                          styles.outlineBtn,
+                          { backgroundColor: colors.background, borderColor: colors.border },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fSemi }]}
+                        >
+                          ⬆️ שחזור מגיבוי
                         </Text>
                       </Pressable>
                     </View>
                   </View>
-                )}
 
-                {sortedHistoryDesc.length === 0 ? (
-                  <View
-                    style={[
-                      styles.subCard,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                        padding: 24,
-                        alignItems: 'center',
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                    >
-                      עדיין לא שמרת אימונים ביומן
-                    </Text>
-                    <Text
+                  {importModalOpen && (
+                    <View
                       style={[
-                        styles.subCardText,
-                        { color: colors.mutedForeground, fontFamily: fReg, textAlign: 'center' },
+                        styles.subCard,
+                        { backgroundColor: colors.background, borderColor: colors.border, gap: 8 },
                       ]}
                     >
-                      בחר אימון בלשוניות למעלה, סמן את הסטים שביצעת עם המשקל ומספר החזרות, ולחץ בתחתית העמוד על "שמור אימון ביומן".
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ gap: 12 }}>
-                    {sortedHistoryDesc.map((sess) => (
-                      <View
-                        key={sess.id}
+                      <Text
+                        style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
+                      >
+                        הדבק תוכן קובץ גיבוי (JSON):
+                      </Text>
+                      <TextInput
+                        value={importJsonText}
+                        onChangeText={setImportJsonText}
+                        multiline
+                        numberOfLines={4}
+                        placeholder='{"workoutHistory": [...]}'
+                        placeholderTextColor={colors.mutedForeground}
                         style={[
-                          styles.subCard,
+                          styles.noteInput,
                           {
-                            backgroundColor: colors.background,
+                            minHeight: 90,
+                            backgroundColor: colors.card,
                             borderColor: colors.border,
-                            gap: 10,
+                            color: colors.foreground,
+                            fontFamily: fReg,
                           },
                         ]}
+                      />
+                      <View style={styles.setupActionsRow}>
+                        <Pressable
+                          onPress={handleApplyImportJson}
+                          style={[styles.primarySmallBtn, { backgroundColor: colors.primary }]}
+                        >
+                          <Text
+                            style={[
+                              styles.smallBtnText,
+                              { color: colors.primaryForeground, fontFamily: fBold },
+                            ]}
+                          >
+                            טען גיבוי
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  )}
+
+                  {sortedHistoryDesc.length === 0 ? (
+                    <View
+                      style={[
+                        styles.subCard,
+                        {
+                          backgroundColor: colors.background,
+                          borderColor: colors.border,
+                          padding: 24,
+                          alignItems: 'center',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
                       >
+                        עדיין לא שמרת אימונים ביומן
+                      </Text>
+                      <Text
+                        style={[
+                          styles.subCardText,
+                          { color: colors.mutedForeground, fontFamily: fReg, textAlign: 'center' },
+                        ]}
+                      >
+                        בחר אימון בלשוניות למעלה, סמן את הסטים שביצעת עם המשקל ומספר החזרות, ולחץ בתחתית העמוד על "שמור אימון ביומן".
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 12 }}>
+                      {sortedHistoryDesc.map((sess) => (
                         <View
+                          key={sess.id}
                           style={[
-                            styles.rowBetween,
+                            styles.subCard,
                             {
-                              borderBottomWidth: 1,
-                              borderBottomColor: colors.border,
-                              paddingBottom: 8,
+                              backgroundColor: colors.background,
+                              borderColor: colors.border,
+                              gap: 10,
                             },
                           ]}
                         >
-                          <View style={{ gap: 2 }}>
-                            <Text
-                              style={[
-                                styles.subCardTitle,
-                                { color: colors.foreground, fontFamily: fBold },
-                              ]}
-                            >
-                              {sess.workoutTitle}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.subCardText,
-                                { color: colors.mutedForeground, fontFamily: fReg },
-                              ]}
-                            >
-                              📅 {sess.displayDate}
-                            </Text>
-                          </View>
-                          <Pressable
-                            onPress={() => handleDeleteSession(sess.id)}
-                            style={[
-                              styles.outlineBtn,
-                              { backgroundColor: colors.card, borderColor: colors.border },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.smallBtnText,
-                                { color: colors.danger, fontFamily: fSemi },
-                              ]}
-                            >
-                              מחק רישום
-                            </Text>
-                          </Pressable>
-                        </View>
-
-                        {Boolean(sess.note) && (
                           <View
                             style={[
-                              styles.subCard,
+                              styles.rowBetween,
                               {
-                                backgroundColor: colors.card,
-                                borderColor: colors.border,
-                                padding: 10,
+                                borderBottomWidth: 1,
+                                borderBottomColor: colors.border,
+                                paddingBottom: 8,
                               },
                             ]}
                           >
-                            <Text
+                            <View style={{ gap: 2 }}>
+                              <Text
+                                style={[
+                                  styles.subCardTitle,
+                                  { color: colors.foreground, fontFamily: fBold },
+                                ]}
+                              >
+                                {sess.workoutTitle}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.subCardText,
+                                  { color: colors.mutedForeground, fontFamily: fReg },
+                                ]}
+                              >
+                                📅 {sess.displayDate}
+                              </Text>
+                            </View>
+                            <Pressable
+                              onPress={() => handleDeleteSession(sess.id)}
                               style={[
-                                styles.subCardText,
-                                { color: colors.foreground, fontFamily: fReg },
+                                styles.outlineBtn,
+                                { backgroundColor: colors.card, borderColor: colors.border },
                               ]}
                             >
-                              📝 <Text style={{ fontFamily: fBold }}>הערה:</Text> {sess.note}
-                            </Text>
+                              <Text
+                                style={[
+                                  styles.smallBtnText,
+                                  { color: colors.danger, fontFamily: fSemi },
+                                ]}
+                              >
+                                מחק רישום
+                              </Text>
+                            </Pressable>
                           </View>
-                        )}
 
-                        <View style={{ gap: 8 }}>
-                          {(sess.items || []).map((item, idx2) => (
+                          {Boolean(sess.note) && (
                             <View
-                              key={`${item.exId}-${idx2}`}
                               style={[
                                 styles.subCard,
                                 {
@@ -2065,361 +2098,389 @@ export default function App() {
                               <Text
                                 style={[
                                   styles.subCardText,
-                                  { color: colors.foreground, fontFamily: fBold },
+                                  { color: colors.foreground, fontFamily: fReg },
                                 ]}
                               >
-                                {item.exName}
+                                📝 <Text style={{ fontFamily: fBold }}>הערה:</Text> {sess.note}
                               </Text>
-                              <View style={styles.filterRow}>
-                                {(item.sets || []).map((st) => (
-                                  <View
-                                    key={st.setNum}
-                                    style={[
-                                      styles.pillBadge,
-                                      { backgroundColor: colors.secondary },
-                                    ]}
-                                  >
-                                    <Text
+                            </View>
+                          )}
+
+                          <View style={{ gap: 8 }}>
+                            {(sess.items || []).map((item, idx2) => (
+                              <View
+                                key={`${item.exId}-${idx2}`}
+                                style={[
+                                  styles.subCard,
+                                  {
+                                    backgroundColor: colors.card,
+                                    borderColor: colors.border,
+                                    padding: 10,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.subCardText,
+                                    { color: colors.foreground, fontFamily: fBold },
+                                  ]}
+                                >
+                                  {item.exName}
+                                </Text>
+                                <View style={styles.filterRow}>
+                                  {(item.sets || []).map((st) => (
+                                    <View
+                                      key={st.setNum}
                                       style={[
-                                        styles.pillBadgeText,
-                                        { color: colors.secondaryForeground, fontFamily: fMed },
+                                        styles.pillBadge,
+                                        { backgroundColor: colors.secondary },
                                       ]}
                                     >
-                                      סט {st.setNum}: {st.weight} קילוגרם × {st.reps} חזרות
-                                    </Text>
-                                  </View>
-                                ))}
+                                      <Text
+                                        style={[
+                                          styles.pillBadgeText,
+                                          { color: colors.secondaryForeground, fontFamily: fMed },
+                                        ]}
+                                      >
+                                        סט {st.setNum}: {st.weight} קילוגרם × {st.reps} חזרות
+                                      </Text>
+                                    </View>
+                                  ))}
+                                </View>
                               </View>
-                            </View>
-                          ))}
+                            ))}
+                          </View>
                         </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* PLATE CALCULATOR SECTION */}
-          {currentTab === 'calculator' && activeCalcCfg && (
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                מחשבון הרכבת פלטות – מותאם בדיוק לארגז המשקולות שלך
-              </Text>
-              <Text
-                style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
-              >
-                מה שיש לך בארגז: 4 פלטות של 5 קילוגרם, 4 פלטות של 2.5 קילוגרם, 6 פלטות של 1.25 קילוגרם, ו-6 פלטות של 0.5 קילוגרם. בחר איזה מוט אתה מרכיב ולאיזה משקל תרצה להגיע, והמחשבון יראה לך אילו פלטות לשים בכל צד.
-              </Text>
-
-              <View style={[styles.statsGrid, isWide && styles.statsGridWide]}>
-                {[
-                  {
-                    id: 'pair',
-                    title: 'שתי משקולות יד שוות',
-                    sub: 'שני המוטות הקצרים | עד 20.5 קילוגרם בכל יד',
-                  },
-                  {
-                    id: 'single',
-                    title: 'משקולת יד אחת כבדה',
-                    sub: 'מוט קצר אחד | עד 34.5 קילוגרם (לתרגיל חתירה)',
-                  },
-                  {
-                    id: 'barbell',
-                    title: 'המוט הארוך (152 סנטימטר)',
-                    sub: 'המוט שמתחבר משני חלקים | עד 46.5 קילוגרם',
-                  },
-                ].map((m) => {
-                  const active = calcMode === m.id;
-                  return (
-                    <Pressable
-                      key={m.id}
-                      onPress={() => {
-                        setCalcMode(m.id);
-                        setCalcIdx(6);
-                      }}
-                      style={[
-                        styles.subCard,
-                        {
-                          flex: 1,
-                          backgroundColor: active ? colors.primary : colors.background,
-                          borderColor: active ? colors.primary : colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.subCardTitle,
-                          {
-                            color: active ? colors.primaryForeground : colors.foreground,
-                            fontFamily: fBold,
-                          },
-                        ]}
-                      >
-                        {m.title}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.subCardText,
-                          {
-                            color: active ? colors.primaryForeground : colors.mutedForeground,
-                            opacity: active ? 0.9 : 1,
-                            fontFamily: fReg,
-                          },
-                        ]}
-                      >
-                        {m.sub}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <View
-                style={[
-                  styles.subCard,
-                  { backgroundColor: colors.background, borderColor: colors.border, gap: 12 },
-                ]}
-              >
-                <View style={styles.rowBetween}>
-                  <Text
-                    style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fSemi }]}
-                  >
-                    בחר משקל רצוי (כולל משקל המוט עצמו):
-                  </Text>
-                  <View style={styles.stepperGroup}>
-                    <Pressable
-                      onPress={() => setCalcIdx((i) => Math.max(0, i - 1))}
-                      style={[
-                        styles.stepperBtn,
-                        { backgroundColor: colors.card, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.stepperBtnText,
-                          { color: colors.foreground, fontFamily: fBold },
-                        ]}
-                      >
-                        −
-                      </Text>
-                    </Pressable>
-                    <Text
-                      style={[styles.calcBigWeight, { color: colors.primary, fontFamily: fBold }]}
-                    >
-                      {activeCalcCfg.totalWeight}{' '}
-                      {calcMode === 'pair' ? 'קילוגרם בכל יד' : 'קילוגרם בסך הכל'}
-                    </Text>
-                    <Pressable
-                      onPress={() => setCalcIdx((i) => Math.min(calcConfigs.length - 1, i + 1))}
-                      style={[
-                        styles.stepperBtn,
-                        { backgroundColor: colors.card, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.stepperBtnText,
-                          { color: colors.foreground, fontFamily: fBold },
-                        ]}
-                      >
-                        +
-                      </Text>
-                    </Pressable>
-                  </View>
+                      ))}
+                    </View>
+                  )}
                 </View>
+              </View>
+            )}
 
-                <View style={styles.filterRow}>
-                  {calcConfigs.map((c, i) => {
-                    const active = i === safeCalcIdx;
+            {/* PLATE CALCULATOR SECTION */}
+            {currentTab === 'calculator' && activeCalcCfg && (
+              <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                  מחשבון הרכבת פלטות – מותאם בדיוק לארגז המשקולות שלך
+                </Text>
+                <Text
+                  style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
+                >
+                  מה שיש לך בארגז: 4 פלטות של 5 קילוגרם, 4 פלטות של 2.5 קילוגרם, 6 פלטות של 1.25 קילוגרם, ו-6 פלטות של 0.5 קילוגרם. בחר איזה מוט אתה מרכיב ולאיזה משקל תרצה להגיע, והמחשבון יראה לך אילו פלטות לשים בכל צד.
+                </Text>
+
+                <View style={[styles.statsGrid, isWide && styles.statsGridWide]}>
+                  {(
+                    [
+                      {
+                        id: 'pair',
+                        title: 'שתי משקולות יד שוות',
+                        sub: 'שני המוטות הקצרים | עד 20.5 קילוגרם בכל יד',
+                      },
+                      {
+                        id: 'single',
+                        title: 'משקולת יד אחת כבדה',
+                        sub: 'מוט קצר אחד | עד 34.5 קילוגרם (לתרגיל חתירה)',
+                      },
+                      {
+                        id: 'barbell',
+                        title: 'המוט הארוך (152 סנטימטר)',
+                        sub: 'המוט שמתחבר משני חלקים | עד 46.5 קילוגרם',
+                      },
+                    ] as { id: EquipmentMode; title: string; sub: string }[]
+                  ).map((m) => {
+                    const active = calcMode === m.id;
                     return (
                       <Pressable
-                        key={c.totalWeight}
-                        onPress={() => setCalcIdx(i)}
+                        key={m.id}
+                        onPress={() => {
+                          setCalcMode(m.id);
+                          setCalcIdx(6);
+                        }}
                         style={[
-                          styles.filterChip,
+                          styles.subCard,
                           {
-                            backgroundColor: active ? colors.primary : colors.card,
+                            flex: 1,
+                            backgroundColor: active ? colors.primary : colors.background,
                             borderColor: active ? colors.primary : colors.border,
                           },
                         ]}
                       >
                         <Text
                           style={[
-                            styles.smallBtnText,
+                            styles.subCardTitle,
                             {
                               color: active ? colors.primaryForeground : colors.foreground,
-                              fontFamily: fMed,
+                              fontFamily: fBold,
                             },
                           ]}
                         >
-                          {c.totalWeight}
+                          {m.title}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.subCardText,
+                            {
+                              color: active ? colors.primaryForeground : colors.mutedForeground,
+                              opacity: active ? 0.9 : 1,
+                              fontFamily: fReg,
+                            },
+                          ]}
+                        >
+                          {m.sub}
                         </Text>
                       </Pressable>
                     );
                   })}
                 </View>
-              </View>
 
-              <View style={[styles.twoColGrid, isWide && styles.twoColGridWide]}>
                 <View
                   style={[
                     styles.subCard,
-                    {
-                      flex: 1,
-                      backgroundColor: colors.background,
-                      borderColor: colors.border,
-                      gap: 10,
-                    },
+                    { backgroundColor: colors.background, borderColor: colors.border, gap: 12 },
                   ]}
                 >
-                  <Text
-                    style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
+                  <View style={styles.rowBetween}>
+                    <Text
+                      style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fSemi }]}
+                    >
+                      בחר משקל רצוי (כולל משקל המוט עצמו):
+                    </Text>
+                    <View style={styles.stepperGroup}>
+                      <Pressable
+                        onPress={() => setCalcIdx((i) => Math.max(0, i - 1))}
+                        style={[
+                          styles.stepperBtn,
+                          { backgroundColor: colors.card, borderColor: colors.border },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.stepperBtnText,
+                            { color: colors.foreground, fontFamily: fBold },
+                          ]}
+                        >
+                          −
+                        </Text>
+                      </Pressable>
+                      <Text
+                        style={[styles.calcBigWeight, { color: colors.primary, fontFamily: fBold }]}
+                      >
+                        {activeCalcCfg.totalWeight}{' '}
+                        {calcMode === 'pair' ? 'קילוגרם בכל יד' : 'קילוגרם בסך הכל'}
+                      </Text>
+                      <Pressable
+                        onPress={() =>
+                          setCalcIdx((i) => Math.min(calcConfigs.length - 1, i + 1))
+                        }
+                        style={[
+                          styles.stepperBtn,
+                          { backgroundColor: colors.card, borderColor: colors.border },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.stepperBtnText,
+                            { color: colors.foreground, fontFamily: fBold },
+                          ]}
+                        >
+                          +
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  <View style={styles.filterRow}>
+                    {calcConfigs.map((c, i) => {
+                      const active = i === safeCalcIdx;
+                      return (
+                        <Pressable
+                          key={c.totalWeight}
+                          onPress={() => setCalcIdx(i)}
+                          style={[
+                            styles.filterChip,
+                            {
+                              backgroundColor: active ? colors.primary : colors.card,
+                              borderColor: active ? colors.primary : colors.border,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.smallBtnText,
+                              {
+                                color: active ? colors.primaryForeground : colors.foreground,
+                                fontFamily: fMed,
+                              },
+                            ]}
+                          >
+                            {c.totalWeight}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={[styles.twoColGrid, isWide && styles.twoColGridWide]}>
+                  <View
+                    style={[
+                      styles.subCard,
+                      {
+                        flex: 1,
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        gap: 10,
+                      },
+                    ]}
                   >
-                    אילו פלטות להשחיל בכל צד של המוט:
-                  </Text>
-                  {activeCalcCfg.totalPlatesSide === 0 ? (
+                    <Text
+                      style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
+                    >
+                      אילו פלטות להשחיל בכל צד של המוט:
+                    </Text>
+                    {activeCalcCfg.totalPlatesSide === 0 ? (
+                      <Text
+                        style={[
+                          styles.subCardText,
+                          { color: colors.mutedForeground, fontFamily: fReg },
+                        ]}
+                      >
+                        מוט ריק עם סוגרים בלבד (שוקל בערך {activeCalcCfg.barWeight} קילוגרם).
+                      </Text>
+                    ) : (
+                      <View style={{ gap: 8 }}>
+                        {[
+                          { count: activeCalcCfg.c5, label: 'פלטה של 5 קילוגרם' },
+                          { count: activeCalcCfg.c25, label: 'פלטה של 2.5 קילוגרם' },
+                          { count: activeCalcCfg.c125, label: 'פלטה של 1.25 קילוגרם' },
+                          { count: activeCalcCfg.c05, label: 'פלטה של 0.5 קילוגרם' },
+                        ]
+                          .filter((p) => p.count > 0)
+                          .map((p) => (
+                            <View
+                              key={p.label}
+                              style={[
+                                styles.plateRow,
+                                { backgroundColor: colors.card, borderColor: colors.border },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.subCardText,
+                                  { color: colors.foreground, fontFamily: fSemi },
+                                ]}
+                              >
+                                {p.label}
+                              </Text>
+                              <View style={[styles.pillBadge, { backgroundColor: colors.secondary }]}>
+                                <Text
+                                  style={[
+                                    styles.pillBadgeText,
+                                    { color: colors.secondaryForeground, fontFamily: fBold },
+                                  ]}
+                                >
+                                  {p.count} בכל צד של המוט
+                                </Text>
+                              </View>
+                            </View>
+                          ))}
+                      </View>
+                    )}
+
                     <Text
                       style={[
                         styles.subCardText,
-                        { color: colors.mutedForeground, fontFamily: fReg },
+                        {
+                          color: colors.mutedForeground,
+                          fontFamily: fReg,
+                          borderTopWidth: 1,
+                          borderTopColor: colors.border,
+                          paddingTop: 8,
+                        },
                       ]}
                     >
-                      מוט ריק עם סוגרים בלבד (שוקל בערך {activeCalcCfg.barWeight} קילוגרם).
+                      {(() => {
+                        const mult = calcMode === 'pair' ? 4 : 2;
+                        return `כמה פלטות לקחנו בסך הכל מתוך הארגז: ${
+                          activeCalcCfg.c5 * mult
+                        } מתוך 4 של 5 קילוגרם • ${
+                          activeCalcCfg.c25 * mult
+                        } מתוך 4 של 2.5 קילוגרם • ${
+                          activeCalcCfg.c125 * mult
+                        } מתוך 6 של 1.25 קילוגרם • ${
+                          activeCalcCfg.c05 * mult
+                        } מתוך 6 של 0.5 קילוגרם.`;
+                      })()}
                     </Text>
-                  ) : (
-                    <View style={{ gap: 8 }}>
-                      {[
-                        { count: activeCalcCfg.c5, label: 'פלטה של 5 קילוגרם' },
-                        { count: activeCalcCfg.c25, label: 'פלטה של 2.5 קילוגרם' },
-                        { count: activeCalcCfg.c125, label: 'פלטה של 1.25 קילוגרם' },
-                        { count: activeCalcCfg.c05, label: 'פלטה של 0.5 קילוגרם' },
-                      ]
-                        .filter((p) => p.count > 0)
-                        .map((p) => (
-                          <View
-                            key={p.label}
-                            style={[
-                              styles.plateRow,
-                              { backgroundColor: colors.card, borderColor: colors.border },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.subCardText,
-                                { color: colors.foreground, fontFamily: fSemi },
-                              ]}
-                            >
-                              {p.label}
-                            </Text>
-                            <View style={[styles.pillBadge, { backgroundColor: colors.secondary }]}>
-                              <Text
-                                style={[
-                                  styles.pillBadgeText,
-                                  { color: colors.secondaryForeground, fontFamily: fBold },
-                                ]}
-                              >
-                                {p.count} בכל צד של המוט
-                              </Text>
-                            </View>
-                          </View>
-                        ))}
-                    </View>
-                  )}
+                  </View>
 
-                  <Text
+                  {/* Visual Sleeve */}
+                  <View
                     style={[
-                      styles.subCardText,
+                      styles.subCard,
                       {
-                        color: colors.mutedForeground,
-                        fontFamily: fReg,
-                        borderTopWidth: 1,
-                        borderTopColor: colors.border,
-                        paddingTop: 8,
+                        flex: 1,
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        minHeight: 160,
                       },
                     ]}
                   >
-                    {(() => {
-                      const mult = calcMode === 'pair' ? 4 : 2;
-                      return `כמה פלטות לקחנו בסך הכל מתוך הארגז: ${
-                        activeCalcCfg.c5 * mult
-                      } מתוך 4 של 5 קילוגרם • ${
-                        activeCalcCfg.c25 * mult
-                      } מתוך 4 של 2.5 קילוגרם • ${
-                        activeCalcCfg.c125 * mult
-                      } מתוך 6 של 1.25 קילוגרם • ${
-                        activeCalcCfg.c05 * mult
-                      } מתוך 6 של 0.5 קילוגרם.`;
-                    })()}
-                  </Text>
-                </View>
-
-                {/* Visual Sleeve */}
-                <View
-                  style={[
-                    styles.subCard,
-                    {
-                      flex: 1,
-                      backgroundColor: colors.background,
-                      borderColor: colors.border,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minHeight: 160,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.subCardText,
-                      {
-                        color: colors.mutedForeground,
-                        fontFamily: fReg,
-                        marginBottom: 14,
-                        textAlign: 'center',
-                      },
-                    ]}
-                  >
-                    כך נראה צד אחד של המוט (הפלטות הגדולות בפנים והקטנות בחוץ)
-                  </Text>
-                  <View style={styles.sleeveVisualRow}>
-                    <View style={[styles.barGrip, { backgroundColor: colors.mutedForeground }]} />
-                    <View style={[styles.barStopper, { backgroundColor: colors.foreground }]} />
-                    <View style={styles.platesStackRow}>
-                      {[
-                        { count: activeCalcCfg.c5, h: 92, w: 20 },
-                        { count: activeCalcCfg.c25, h: 74, w: 16 },
-                        { count: activeCalcCfg.c125, h: 58, w: 13 },
-                        { count: activeCalcCfg.c05, h: 44, w: 10 },
-                      ].map((pl, gIdx) =>
-                        Array.from({ length: pl.count }, (_, k) => (
-                          <View
-                            key={`${gIdx}-${k}`}
-                            style={{
-                              height: pl.h,
-                              width: pl.w,
-                              borderRadius: 4,
-                              backgroundColor: colors.primary,
-                              marginHorizontal: 1.5,
-                            }}
-                          />
-                        ))
-                      )}
-                    </View>
-                    <View
+                    <Text
                       style={[
-                        styles.spinlockCollar,
-                        { backgroundColor: colors.secondary, borderColor: colors.border },
+                        styles.subCardText,
+                        {
+                          color: colors.mutedForeground,
+                          fontFamily: fReg,
+                          marginBottom: 14,
+                          textAlign: 'center',
+                        },
                       ]}
-                    />
-                    <View
-                      style={[styles.barOuterEnd, { backgroundColor: colors.mutedForeground }]}
-                    />
+                    >
+                      כך נראה צד אחד של המוט (הפלטות הגדולות בפנים והקטנות בחוץ)
+                    </Text>
+                    <View style={styles.sleeveVisualRow}>
+                      <View style={[styles.barGrip, { backgroundColor: colors.mutedForeground }]} />
+                      <View style={[styles.barStopper, { backgroundColor: colors.foreground }]} />
+                      <View style={styles.platesStackRow}>
+                        {[
+                          { count: activeCalcCfg.c5, h: 92, w: 20 },
+                          { count: activeCalcCfg.c25, h: 74, w: 16 },
+                          { count: activeCalcCfg.c125, h: 58, w: 13 },
+                          { count: activeCalcCfg.c05, h: 44, w: 10 },
+                        ].map((pl, gIdx) =>
+                          Array.from({ length: pl.count }, (_, k) => (
+                            <View
+                              key={`${gIdx}-${k}`}
+                              style={{
+                                height: pl.h,
+                                width: pl.w,
+                                borderRadius: 4,
+                                backgroundColor: colors.primary,
+                                marginHorizontal: 1.5,
+                              }}
+                            />
+                          ))
+                        )}
+                      </View>
+                      <View
+                        style={[
+                          styles.spinlockCollar,
+                          { backgroundColor: colors.secondary, borderColor: colors.border },
+                        ]}
+                      />
+                      <View
+                        style={[styles.barOuterEnd, { backgroundColor: colors.mutedForeground }]}
+                      />
+                    </View>
                   </View>
                 </View>
               </View>
-            </View>
-          )}
+            )}
           </View>
         </ScrollView>
       )}
@@ -2622,7 +2683,12 @@ export default function App() {
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
           >
-            <View style={[styles.rowBetween, { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 }]}>
+            <View
+              style={[
+                styles.rowBetween,
+                { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 },
+              ]}
+            >
               <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
                 📖 מדריך, ציוד ביתי ולוח שבועי
               </Text>
@@ -2649,7 +2715,7 @@ export default function App() {
             </View>
 
             <ScrollView contentContainerStyle={{ gap: 12, paddingVertical: 6 }}>
-              {SETUP_MESSAGES[currentTab] && (
+              {currentSetupMessage && (
                 <View
                   style={[
                     styles.subCard,
@@ -2657,10 +2723,10 @@ export default function App() {
                   ]}
                 >
                   <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                    {SETUP_MESSAGES[currentTab].title}
+                    {currentSetupMessage.title}
                   </Text>
                   <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
-                    {SETUP_MESSAGES[currentTab].desc}
+                    {currentSetupMessage.desc}
                   </Text>
                 </View>
               )}
@@ -3377,54 +3443,12 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 6,
   },
-  headerRow: {
-    flexDirection: 'column',
-    gap: 14,
-  },
-  headerRowWide: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerTextCol: {
-    flex: 1,
-    gap: 8,
-    alignItems: 'flex-end',
-  },
-  badgesWrap: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
   pillBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
   },
   pillBadgeText: {
-    fontSize: 12,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  appTitle: {
-    fontSize: 26,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  appSubtitle: {
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  googleSyncBtn: {
-    marginTop: 2,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  googleSyncBtnText: {
     fontSize: 12,
     textAlign: 'right',
     writingDirection: 'rtl',
@@ -3445,32 +3469,6 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     paddingHorizontal: 10,
     paddingVertical: 5,
-  },
-  timerBox: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 14,
-  },
-  timerReadoutCol: {
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  timerLabel: {
-    fontSize: 12,
-  },
-  timerValue: {
-    fontSize: 22,
-  },
-  timerButtonsCol: {
-    gap: 6,
-  },
-  timerPresetRow: {
-    flexDirection: 'row-reverse',
-    gap: 6,
   },
   smallBtn: {
     paddingHorizontal: 10,
@@ -3498,23 +3496,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     writingDirection: 'rtl',
-  },
-  accordionHeader: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  accordionTitle: {
-    flex: 1,
-    fontSize: 14,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  accordionBody: {
-    borderTopWidth: 1,
-    paddingTop: 14,
-    gap: 12,
   },
   glossaryGrid: {
     gap: 10,
@@ -3571,26 +3552,6 @@ const styles = StyleSheet.create({
   dayBoxSub: {
     fontSize: 12,
   },
-  tabsWrap: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 8,
-    borderBottomWidth: 1,
-    paddingBottom: 12,
-  },
-  tabBtn: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  tabBtnText: {
-    fontSize: 13,
-    writingDirection: 'rtl',
-  },
   tabCountBadge: {
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -3598,12 +3559,6 @@ const styles = StyleSheet.create({
   },
   tabCountText: {
     fontSize: 12,
-  },
-  setupBanner: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
   },
   setupActionsRow: {
     flexDirection: 'row-reverse',
@@ -3621,23 +3576,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  exercisesList: {
-    gap: 16,
-  },
-  exHeader: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 10,
-    borderBottomWidth: 1,
-    paddingBottom: 12,
-  },
-  exTitleRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 8,
-  },
   indexBadge: {
     width: 28,
     height: 28,
@@ -3648,59 +3586,10 @@ const styles = StyleSheet.create({
   indexBadgeText: {
     fontSize: 14,
   },
-  exTitle: {
-    flex: 1,
-    fontSize: 18,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  lastLogBadge: {
-    alignSelf: 'flex-end',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  lastLogText: {
-    fontSize: 12,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  exPillsCol: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  exBodyGrid: {
-    gap: 16,
-  },
-  exBodyGridWide: {
-    flexDirection: 'row-reverse',
-    alignItems: 'flex-start',
-  },
-  exAnimCol: {
-    gap: 10,
-  },
-  exAnimColWide: {
-    width: '41%',
-  },
-  exDetailsCol: {
-    gap: 12,
-  },
-  exDetailsColWide: {
-    flex: 1,
-  },
   videosRow: {
     flexDirection: 'row-reverse',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  videoBtn: {
-    flexGrow: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 11,
-    borderWidth: 1,
-    alignItems: 'center',
   },
   stepRow: {
     flexDirection: 'row-reverse',
@@ -3718,56 +3607,8 @@ const styles = StyleSheet.create({
   stepNumText: {
     fontSize: 12,
   },
-  stepBodyText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  loggerSection: {
-    borderTopWidth: 1,
-    paddingTop: 12,
-    gap: 10,
-  },
-  loggerHeader: {
-    fontSize: 13,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
   modeToggleWrap: {
     flexDirection: 'row-reverse',
-    gap: 6,
-  },
-  modeToggleBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  setCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    gap: 10,
-  },
-  setCardHeaderRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  setWeightSection: {
-    borderTopWidth: 1,
-    paddingTop: 10,
-    gap: 8,
-  },
-  setCopyRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     gap: 6,
   },
   copyAllSetsBtn: {
@@ -3781,42 +3622,10 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     writingDirection: 'rtl',
   },
-  supportedWeightsCaption: {
-    fontSize: 12,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
   chipsScrollRow: {
     flexDirection: 'row-reverse',
     gap: 6,
     paddingVertical: 2,
-  },
-  weightOptionChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    minWidth: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  plateRecipeBar: {
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  plateRecipeText: {
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  setLabel: {
-    fontSize: 12,
-    minWidth: 42,
-    textAlign: 'right',
-    writingDirection: 'rtl',
   },
   stepperGroup: {
     flexDirection: 'row-reverse',
@@ -3856,25 +3665,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginRight: 2,
   },
-  doneBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 9,
-    borderWidth: 1,
-    minWidth: 88,
-    alignItems: 'center',
-  },
   saveCardTitle: {
     fontSize: 16,
     textAlign: 'right',
     writingDirection: 'rtl',
-  },
-  saveInputRow: {
-    gap: 10,
-  },
-  saveInputRowWide: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
   },
   noteInput: {
     flex: 1,

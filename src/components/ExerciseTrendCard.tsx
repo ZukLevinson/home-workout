@@ -2,17 +2,40 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Line, Polyline, Circle, G, Text as SvgText } from 'react-native-svg';
 import { fontForWeight } from '../theme';
+import type { LoggedSet, ThemeColors, WorkoutSession } from '../types';
 
-function roundWeight(val) {
+function roundWeight(val: number): number {
   return Math.round((Number(val) || 0) * 100) / 100;
 }
 
-export function getExerciseTrendSummary(exerciseId, workoutHistory, colors) {
+export interface ExerciseSessionSummary {
+  dateShort: string;
+  dateFull: string;
+  bestWeight: number;
+  bestReps: number;
+  sets: LoggedSet[];
+}
+
+export interface ExerciseTrendSummary {
+  sessions: ExerciseSessionSummary[];
+  last: ExerciseSessionSummary | null;
+  trendBg: string;
+  trendFg: string;
+  strokeColor: string;
+  trendLabel: string;
+  shortLine: string;
+}
+
+export function getExerciseTrendSummary(
+  exerciseId: string,
+  workoutHistory: WorkoutSession[],
+  colors: ThemeColors
+): ExerciseTrendSummary {
   const chronological = [...(workoutHistory || [])].sort(
     (a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0)
   );
 
-  const sessions = [];
+  const sessions: ExerciseSessionSummary[] = [];
   chronological.forEach((sess) => {
     const found = (sess.items || []).find(
       (it) => it.exId === exerciseId && Array.isArray(it.sets) && it.sets.length > 0
@@ -114,6 +137,15 @@ export function getExerciseTrendSummary(exerciseId, workoutHistory, colors) {
   };
 }
 
+export interface ExerciseTrendCardProps {
+  exerciseId: string;
+  workoutHistory: WorkoutSession[];
+  liveBestWeight: number;
+  colors: ThemeColors;
+  fontsLoaded: boolean;
+  compact?: boolean;
+}
+
 export default function ExerciseTrendCard({
   exerciseId,
   workoutHistory,
@@ -121,20 +153,13 @@ export default function ExerciseTrendCard({
   colors,
   fontsLoaded,
   compact = false,
-}) {
+}: ExerciseTrendCardProps): React.ReactElement {
   const fReg = fontForWeight('regular', fontsLoaded);
-  const fMed = fontForWeight('medium', fontsLoaded);
   const fSemi = fontForWeight('semibold', fontsLoaded);
   const fBold = fontForWeight('bold', fontsLoaded);
 
-  const {
-    sessions,
-    last,
-    trendBg,
-    trendFg,
-    strokeColor,
-    trendLabel,
-  } = getExerciseTrendSummary(exerciseId, workoutHistory, colors);
+  const { sessions, last, trendBg, trendFg, strokeColor, trendLabel } =
+    getExerciseTrendSummary(exerciseId, workoutHistory, colors);
 
   if (!last) {
     return (
@@ -151,7 +176,10 @@ export default function ExerciseTrendCard({
           </Text>
           <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
             <Text
-              style={[styles.badgeText, { color: colors.secondaryForeground, fontFamily: fSemi }]}
+              style={[
+                styles.badgeText,
+                { color: colors.secondaryForeground, fontFamily: fSemi },
+              ]}
             >
               🆕 אין היסטוריה שמורה עדיין
             </Text>
@@ -237,9 +265,7 @@ export default function ExerciseTrendCard({
           {!compact && (
             <Text style={[styles.setsBreakdown, { color: colors.mutedForeground, fontFamily: fReg }]}>
               סטים מהפעם הקודמת:{' '}
-              {last.sets
-                .map((s) => `${s.weight} קילוגרם (${s.reps} חזרות)`)
-                .join('  •  ')}
+              {last.sets.map((s) => `${s.weight} קילוגרם (${s.reps} חזרות)`).join('  •  ')}
             </Text>
           )}
 

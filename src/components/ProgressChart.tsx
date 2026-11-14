@@ -2,14 +2,33 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Line, Polyline, Circle, G, Text as SvgText } from 'react-native-svg';
 import { fontForWeight } from '../theme';
+import type { ThemeColors, WorkoutSession } from '../types';
 
-export default function ProgressChart({ exerciseId, workoutHistory, colors, fontsLoaded }) {
+export interface ProgressChartProps {
+  exerciseId: string;
+  workoutHistory: WorkoutSession[];
+  colors: ThemeColors;
+  fontsLoaded: boolean;
+}
+
+interface ChartPoint {
+  date: string;
+  weight: number;
+  reps: number;
+}
+
+export default function ProgressChart({
+  exerciseId,
+  workoutHistory,
+  colors,
+  fontsLoaded,
+}: ProgressChartProps): React.ReactElement {
   // workoutHistory is sorted oldest -> newest or newest -> oldest; sort chronologically by createdAtMs
   const chronological = [...workoutHistory].sort(
     (a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0)
   );
 
-  const points = [];
+  const points: ChartPoint[] = [];
   chronological.forEach((sess) => {
     const found = (sess.items || []).find(
       (it) => it.exId === exerciseId && Array.isArray(it.sets) && it.sets.length > 0
@@ -30,7 +49,12 @@ export default function ProgressChart({ exerciseId, workoutHistory, colors, font
 
   if (points.length === 0) {
     return (
-      <View style={[styles.emptyBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.emptyBox,
+          { backgroundColor: colors.background, borderColor: colors.border },
+        ]}
+      >
         <Text
           style={[
             styles.emptyText,
@@ -71,7 +95,12 @@ export default function ProgressChart({ exerciseId, workoutHistory, colors, font
   const polylinePoints = coords.map((c) => `${c.x},${c.y}`).join(' ');
 
   return (
-    <View style={[styles.chartBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.chartBox,
+        { backgroundColor: colors.background, borderColor: colors.border },
+      ]}
+    >
       <View style={styles.summaryRow}>
         <Text
           style={[
@@ -80,7 +109,9 @@ export default function ProgressChart({ exerciseId, workoutHistory, colors, font
           ]}
         >
           משקל אחרון:{' '}
-          <Text style={{ color: colors.foreground, fontFamily: fontForWeight('bold', fontsLoaded) }}>
+          <Text
+            style={{ color: colors.foreground, fontFamily: fontForWeight('bold', fontsLoaded) }}
+          >
             {latest.weight} קילוגרם ({latest.reps} חזרות)
           </Text>
         </Text>

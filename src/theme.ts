@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
+import type { ThemeColors } from './types';
 
-export const lightColors = {
+export const lightColors: ThemeColors = {
   background: '#f8fafc',
   foreground: '#0f172a',
   card: '#ffffff',
@@ -17,7 +18,7 @@ export const lightColors = {
   dangerSoft: '#fff1f2',
 };
 
-export const darkColors = {
+export const darkColors: ThemeColors = {
   background: '#0b1120',
   foreground: '#f1f5f9',
   card: '#131c31',
@@ -34,7 +35,12 @@ export const darkColors = {
   dangerSoft: 'rgba(244, 63, 94, 0.14)',
 };
 
-export function fontForWeight(weight = 'regular', fontsLoaded = false) {
+export type FontWeightName = 'regular' | 'medium' | 'semibold' | 'bold';
+
+export function fontForWeight(
+  weight: FontWeightName = 'regular',
+  fontsLoaded = false
+): string | undefined {
   if (!fontsLoaded) {
     return Platform.select({
       web: 'Rubik, -apple-system, BlinkMacSystemFont, sans-serif',

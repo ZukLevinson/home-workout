@@ -9,6 +9,6 @@ export const firebaseConfig = {
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '1:174801001170:web:989fa80c4b7de3b24bab0b',
 };
 
-export function isFirebaseConfigured() {
+export function isFirebaseConfigured(): boolean {
   return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.appId);
 }

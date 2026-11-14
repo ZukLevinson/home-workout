@@ -1,5 +1,14 @@
+import type {
+  EquipmentMode,
+  Exercise,
+  GlossaryItem,
+  PlateConfig,
+  SetupMessage,
+  WeeklyScheduleDay,
+} from '../types';
+
 // Exact home equipment inventory from the user's spinlock set (zero abbreviations):
-export const EQUIPMENT_SUMMARY_ITEMS = [
+export const EQUIPMENT_SUMMARY_ITEMS: string[] = [
   '4 פלטות × 5 קילוגרם',
   '4 פלטות × 2.5 קילוגרם',
   '6 פלטות × 1.25 קילוגרם',
@@ -8,7 +17,7 @@ export const EQUIPMENT_SUMMARY_ITEMS = [
   'מוט ארוך 152 סנטימטר (6 קילוגרם עם סוגרים)',
 ];
 
-export const GLOSSARY_ITEMS = [
+export const GLOSSARY_ITEMS: GlossaryItem[] = [
   {
     title: '1. מה זה "חזרה"?',
     body: 'פעם אחת מלאה שבה אתה מרים את המשקולת ומוריד אותה חזרה למקום.',
@@ -27,7 +36,7 @@ export const GLOSSARY_ITEMS = [
   },
 ];
 
-export const WEEKLY_SCHEDULE = [
+export const WEEKLY_SCHEDULE: WeeklyScheduleDay[] = [
   { day: 'ראשון', label: 'קרוספיט', highlight: 'secondary' },
   { day: 'שני', label: 'בית 1', highlight: 'primary' },
   { day: 'שלישי', label: 'קרוספיט', highlight: 'secondary' },
@@ -37,7 +46,7 @@ export const WEEKLY_SCHEDULE = [
   { day: 'שבת', label: 'מנוחה', highlight: 'card' },
 ];
 
-export const SETUP_MESSAGES = {
+export const SETUP_MESSAGES: Record<'workoutA' | 'workoutB' | 'express', SetupMessage> = {
   workoutA: {
     title: '🔧 אימון בית 1: חזה, גב וזרועות (בערך 40 דקות)',
     desc: 'בחר בכל תרגיל משקל מתוך המשקלים האפשריים בערכה שלך (כולל הוראות הרכבת פלטות אוטומטיות) וסמן "בוצע". בסיום שמור ביומן!',
@@ -52,15 +61,22 @@ export const SETUP_MESSAGES = {
   },
 };
 
-export const WORKOUT_NAMES_MAP = {
+export const WORKOUT_NAMES_MAP: Record<string, string> = {
   workoutA: 'אימון בית 1: חזה, גב וזרועות',
   workoutB: 'אימון בית 2: כתפיים, גב וזרועות',
   express: 'אימון קצר (20 דקות)',
 };
 
-export const MUSCLE_FILTERS = ['all', 'חזה', 'גב', 'כתפיים', 'יד אחורית', 'יד קדמית'];
+export const MUSCLE_FILTERS: string[] = [
+  'all',
+  'חזה',
+  'גב',
+  'כתפיים',
+  'יד אחורית',
+  'יד קדמית',
+];
 
-export const EXERCISES = [
+export const EXERCISES: Exercise[] = [
   {
     id: 'ex1',
     workouts: ['workoutA', 'express'],
@@ -362,7 +378,7 @@ export const EXERCISES = [
   },
 ];
 
-export function buildConfigsForMode(mode) {
+export function buildConfigsForMode(mode: EquipmentMode): PlateConfig[] {
   if (mode === 'platePair') {
     // Holding matching plates directly in each hand (2 hands => need at least 2 of that plate, all 4 sizes have >=4!)
     return [0.5, 1.25, 2.5, 5].map((w) => ({
@@ -398,7 +414,7 @@ export function buildConfigsForMode(mode) {
       ? { p5: 1, p2_5: 1, p1_25: 1, p0_5: 1 }
       : { p5: 2, p2_5: 2, p1_25: 3, p0_5: 3 };
   const maxPlatesOnSleeve = mode === 'single' ? 5 : 10;
-  const map = new Map();
+  const map = new Map<number, PlateConfig>();
 
   for (let c5 = 0; c5 <= maxPerSide.p5; c5++) {
     for (let c25 = 0; c25 <= maxPerSide.p2_5; c25++) {
@@ -410,7 +426,8 @@ export function buildConfigsForMode(mode) {
           const sideWeight = c5 * 5.0 + c25 * 2.5 + c125 * 1.25 + c05 * 0.5;
           const totalWeight = Math.round((barWeight + sideWeight * 2) * 100) / 100;
 
-          if (!map.has(totalWeight) || map.get(totalWeight).totalPlatesSide > totalPlatesSide) {
+          const existing = map.get(totalWeight);
+          if (!existing || existing.totalPlatesSide > totalPlatesSide) {
             map.set(totalWeight, {
               totalWeight,
               barWeight,
@@ -430,7 +447,7 @@ export function buildConfigsForMode(mode) {
   return Array.from(map.values()).sort((a, b) => a.totalWeight - b.totalWeight);
 }
 
-export function snapToSupportedWeight(rawWeight, configs) {
+export function snapToSupportedWeight(rawWeight: number, configs: PlateConfig[]): number {
   if (!configs || configs.length === 0) return rawWeight;
   const num = Number(rawWeight);
   if (Number.isNaN(num)) return configs[0].totalWeight;
@@ -446,7 +463,10 @@ export function snapToSupportedWeight(rawWeight, configs) {
   return best;
 }
 
-export function describeConfigSetup(cfg, mode) {
+export function describeConfigSetup(
+  cfg: PlateConfig | null | undefined,
+  mode: EquipmentMode
+): string {
   if (!cfg) return '';
   if (mode === 'platePair') {
     return `מחזיקים פלטה אחת של ${cfg.totalWeight} קילוגרם ישירות בכל יד (ללא מוט)`;
@@ -469,7 +489,7 @@ export function describeConfigSetup(cfg, mode) {
     return `${barLabel} – ללא פלטות כלל`;
   }
 
-  const parts = [];
+  const parts: string[] = [];
   if (cfg.c5 > 0) parts.push(`${cfg.c5} × 5 קילוגרם`);
   if (cfg.c25 > 0) parts.push(`${cfg.c25} × 2.5 קילוגרם`);
   if (cfg.c125 > 0) parts.push(`${cfg.c125} × 1.25 קילוגרם`);

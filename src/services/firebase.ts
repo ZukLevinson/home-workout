@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   signInAnonymously,
@@ -8,6 +8,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   linkWithPopup,
+  type Auth,
+  type User,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -18,17 +20,27 @@ import {
   query,
   orderBy,
   onSnapshot,
+  type Firestore,
+  type Unsubscribe,
 } from 'firebase/firestore';
 import { firebaseConfig, isFirebaseConfigured } from '../firebaseConfig';
+import type { ActiveDraft, SyncStatus, WorkoutSession } from '../types';
 
 const LOCAL_DRAFT_KEY = 'hw_rn_active_draft_v1';
 const LOCAL_HISTORY_KEY = 'hw_rn_workout_history_v1';
 
-let appInstance = null;
-let authInstance = null;
-let dbInstance = null;
+let appInstance: FirebaseApp | null = null;
+let authInstance: Auth | null = null;
+let dbInstance: Firestore | null = null;
 
-export function getFirebaseServices() {
+export interface FirebaseServicesResult {
+  app: FirebaseApp | null;
+  auth: Auth | null;
+  db: Firestore | null;
+  configured: boolean;
+}
+
+export function getFirebaseServices(): FirebaseServicesResult {
   if (!isFirebaseConfigured()) {
     return { app: null, auth: null, db: null, configured: false };
   }
@@ -40,46 +52,64 @@ export function getFirebaseServices() {
   return { app: appInstance, auth: authInstance, db: dbInstance, configured: true };
 }
 
-export async function loadLocalState() {
+export async function loadLocalState(): Promise<{
+  draft: ActiveDraft;
+  history: WorkoutSession[];
+}> {
   try {
     const [rawDraft, rawHistory] = await Promise.all([
       AsyncStorage.getItem(LOCAL_DRAFT_KEY),
       AsyncStorage.getItem(LOCAL_HISTORY_KEY),
     ]);
     return {
-      draft: rawDraft ? JSON.parse(rawDraft) : {},
-      history: rawHistory ? JSON.parse(rawHistory) : [],
+      draft: rawDraft ? (JSON.parse(rawDraft) as ActiveDraft) : {},
+      history: rawHistory ? (JSON.parse(rawHistory) as WorkoutSession[]) : [],
     };
-  } catch (err) {
+  } catch {
     return { draft: {}, history: [] };
   }
 }
 
-export async function saveLocalDraft(draft) {
+export async function saveLocalDraft(draft: ActiveDraft): Promise<void> {
   try {
     await AsyncStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(draft));
-  } catch (err) {
+  } catch {
     // ignore storage quota errors
   }
 }
 
-export async function saveLocalHistory(history) {
+export async function saveLocalHistory(history: WorkoutSession[]): Promise<void> {
   try {
     await AsyncStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(history));
-  } catch (err) {
+  } catch {
     // ignore storage quota errors
   }
 }
 
-export function subscribeAuthAndFirestore({ onUserChange, onDraftRemote, onHistoryRemote, onSyncStatus }) {
+export interface SubscribeAuthAndFirestoreParams {
+  onUserChange: (user: User) => void;
+  onDraftRemote: (draft: ActiveDraft) => void;
+  onHistoryRemote: (history: WorkoutSession[]) => void;
+  onSyncStatus: (status: SyncStatus) => void;
+}
+
+export function subscribeAuthAndFirestore({
+  onUserChange,
+  onDraftRemote,
+  onHistoryRemote,
+  onSyncStatus,
+}: SubscribeAuthAndFirestoreParams): () => void {
   const { auth, db, configured } = getFirebaseServices();
   if (!configured || !auth || !db) {
-    onSyncStatus({ mode: 'local', message: 'שמירה מקומית על המכשיר (ממתין לחיבור פרויקט Firebase)' });
+    onSyncStatus({
+      mode: 'local',
+      message: 'שמירה מקומית על המכשיר (ממתין לחיבור פרויקט Firebase)',
+    });
     return () => {};
   }
 
-  let unsubDraft = null;
-  let unsubWorkouts = null;
+  let unsubDraft: Unsubscribe | null = null;
+  let unsubWorkouts: Unsubscribe | null = null;
 
   const cleanupListeners = () => {
     if (unsubDraft) {
@@ -99,7 +129,7 @@ export function subscribeAuthAndFirestore({ onUserChange, onDraftRemote, onHisto
     if (!user) {
       try {
         await signInAnonymously(auth);
-      } catch (err) {
+      } catch {
         onSyncStatus({
           mode: 'local',
           message: 'שמירה מקומית על המכשיר (חיבור לענן לא זמין כרגע)',
@@ -125,11 +155,11 @@ export function subscribeAuthAndFirestore({ onUserChange, onDraftRemote, onHisto
           const data = snap.data();
           if (data && typeof data.draftJson === 'string') {
             try {
-              const parsed = JSON.parse(data.draftJson);
+              const parsed = JSON.parse(data.draftJson) as unknown;
               if (parsed && typeof parsed === 'object') {
-                onDraftRemote(parsed);
+                onDraftRemote(parsed as ActiveDraft);
               }
-            } catch (e) {
+            } catch {
               // ignore malformed draft
             }
           }
@@ -146,9 +176,9 @@ export function subscribeAuthAndFirestore({ onUserChange, onDraftRemote, onHisto
     unsubWorkouts = onSnapshot(
       workoutsQuery,
       (snap) => {
-        const list = [];
+        const list: WorkoutSession[] = [];
         snap.forEach((docSnap) => {
-          list.push(docSnap.data());
+          list.push(docSnap.data() as WorkoutSession);
         });
         onHistoryRemote(list);
       },
@@ -162,7 +192,7 @@ export function subscribeAuthAndFirestore({ onUserChange, onDraftRemote, onHisto
   };
 }
 
-export async function syncDraftToCloud(uid, draftObj) {
+export async function syncDraftToCloud(uid: string, draftObj: ActiveDraft): Promise<void> {
   const { db, configured } = getFirebaseServices();
   if (!configured || !db || !uid) return;
   const draftJson = JSON.stringify(draftObj || {});
@@ -174,21 +204,27 @@ export async function syncDraftToCloud(uid, draftObj) {
   });
 }
 
-export async function saveWorkoutToCloud(uid, sessionDoc) {
+export async function saveWorkoutToCloud(
+  uid: string,
+  sessionDoc: WorkoutSession
+): Promise<void> {
   const { db, configured } = getFirebaseServices();
   if (!configured || !db || !uid) return;
   const ref = doc(db, 'users', uid, 'workouts', sessionDoc.id);
   await setDoc(ref, sessionDoc);
 }
 
-export async function deleteWorkoutFromCloud(uid, workoutId) {
+export async function deleteWorkoutFromCloud(
+  uid: string,
+  workoutId: string
+): Promise<void> {
   const { db, configured } = getFirebaseServices();
   if (!configured || !db || !uid) return;
   const ref = doc(db, 'users', uid, 'workouts', workoutId);
   await deleteDoc(ref);
 }
 
-export async function connectGoogleAccount() {
+export async function connectGoogleAccount(): Promise<User> {
   if (Platform.OS !== 'web') {
     throw new Error('התחברות מהירה עם Google זמינה כרגע בגרסת הדפדפן.');
   }
@@ -201,9 +237,14 @@ export async function connectGoogleAccount() {
     try {
       const res = await linkWithPopup(auth.currentUser, provider);
       return res.user;
-    } catch (err) {
+    } catch (err: unknown) {
       // If Google account already linked to an existing user, sign in directly to that Google user
-      if (err && err.code === 'auth/credential-already-in-use') {
+      if (
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as { code?: string }).code === 'auth/credential-already-in-use'
+      ) {
         const res = await signInWithPopup(auth, provider);
         return res.user;
       }

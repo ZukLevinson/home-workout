@@ -2,17 +2,29 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Svg, { Line, Circle, Rect, Ellipse, G, Text as SvgText } from 'react-native-svg';
 import { fontForWeight } from '../theme';
+import type { EquipmentMode, PlateConfig, ThemeColors } from '../types';
 
-function clamp01(v) {
+function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
 }
 
-function easeOutCubic(t) {
+function easeOutCubic(t: number): number {
   const u = clamp01(t);
   return 1 - Math.pow(1 - u, 3);
 }
 
-const PLATE_STYLES = {
+interface PlateStyleInfo {
+  weight: number;
+  label: string;
+  rY: number;
+  rX: number;
+  fill: string;
+  edge: string;
+  stroke: string;
+  badgeBg: string;
+}
+
+const PLATE_STYLES: Record<number, PlateStyleInfo> = {
   5: {
     weight: 5,
     label: '5',
@@ -55,14 +67,28 @@ const PLATE_STYLES = {
   },
 };
 
-function expandPlates(cfg) {
+function expandPlates(cfg: PlateConfig | null | undefined): PlateStyleInfo[] {
   if (!cfg) return [];
-  const list = [];
+  const list: PlateStyleInfo[] = [];
   for (let i = 0; i < (cfg.c5 || 0); i++) list.push(PLATE_STYLES[5]);
   for (let i = 0; i < (cfg.c25 || 0); i++) list.push(PLATE_STYLES[2.5]);
   for (let i = 0; i < (cfg.c125 || 0); i++) list.push(PLATE_STYLES[1.25]);
   for (let i = 0; i < (cfg.c05 || 0); i++) list.push(PLATE_STYLES[0.5]);
   return list;
+}
+
+interface RenderLoadedBarParams {
+  cx: number;
+  barY: number;
+  halfLen: number;
+  gripHalf: number;
+  plateStep: number;
+  scale: number;
+  isBarbell: boolean;
+  plates: PlateStyleInfo[];
+  phaseMs: number;
+  colors: ThemeColors;
+  keyPrefix: string;
 }
 
 /**
@@ -81,7 +107,7 @@ function renderLoadedBar({
   phaseMs,
   colors,
   keyPrefix,
-}) {
+}: RenderLoadedBarParams): React.ReactElement[] {
   // Active assembly happens in first 1500ms of each 4800ms cycle
   const cycleMs = phaseMs % 4800;
   const n = plates.length;
@@ -93,10 +119,12 @@ function renderLoadedBar({
   const collarStartOffset = halfLen + 8 * scale;
   const collarT = n === 0 ? 1 : easeOutCubic((cycleMs - 950) / 480);
   const collarOffset =
-    cycleMs >= 1500 ? collarRestOffset : collarStartOffset + (collarRestOffset - collarStartOffset) * collarT;
+    cycleMs >= 1500
+      ? collarRestOffset
+      : collarStartOffset + (collarRestOffset - collarStartOffset) * collarT;
   const collarOpacity = n === 0 ? 0.9 : clamp01((cycleMs - 880) / 220);
 
-  const elements = [];
+  const elements: React.ReactElement[] = [];
 
   // Chrome threaded bar shaft
   elements.push(
@@ -165,10 +193,8 @@ function renderLoadedBar({
   );
 
   // Helper to render plates for one side (-1 left, +1 right)
-  const drawSidePlates = (dir) => {
-    // Draw from outer to inner or inner to outer?
-    // If angled slightly toward center / outward, drawing from INNERMOST -> OUTERMOST
-    // means smaller outer discs sit cleanly in front of larger inner discs like real stacked plates!
+  const drawSidePlates = (dir: -1 | 1) => {
+    // Draw from INNERMOST -> OUTERMOST so outer discs sit cleanly in front of inner discs
     for (let i = 0; i < n; i++) {
       const p = plates[i];
       const ry = p.rY * scale;
@@ -185,20 +211,14 @@ function renderLoadedBar({
       // 3D rim thickness offset toward inner side
       const rimShift = -dir * 3.5 * scale;
 
-      // Only draw top/bottom weight callouts if plates are reasonably spaced, or alternate cleanly
+      // Alternate top/bottom weight callouts cleanly
       const showLabelAbove = i % 2 === 0;
       const tagY = showLabelAbove ? barY - ry - 12 * scale : barY + ry + 13 * scale;
 
       elements.push(
         <G key={`${keyPrefix}-plate-${dir}-${i}`} opacity={opacity}>
           {/* 3D Cylinder Back/Side Thickness */}
-          <Ellipse
-            cx={px + rimShift}
-            cy={barY}
-            rx={rx}
-            ry={ry}
-            fill={p.edge}
-          />
+          <Ellipse cx={px + rimShift} cy={barY} rx={rx} ry={ry} fill={p.edge} />
           {/* Main Circular/Angled Disc Face */}
           <Ellipse
             cx={px}
@@ -229,7 +249,7 @@ function renderLoadedBar({
             fill="#64748b"
           />
 
-          {/* Show big weight number directly on outermost plate face if single/outermost, AND clean leader tag for every plate */}
+          {/* Big weight number directly on outermost plate face if 1-2 plates */}
           {i === n - 1 && n <= 2 && rx >= 10 && (
             <SvgText
               x={px + dir * (rx * 0.36)}
@@ -309,16 +329,25 @@ function renderLoadedBar({
   return elements;
 }
 
+export interface EquipmentBuildDiagramProps {
+  cfg: PlateConfig;
+  mode: EquipmentMode;
+  paused?: boolean;
+  colors: ThemeColors;
+  fontsLoaded: boolean;
+  compact?: boolean;
+}
+
 export default function EquipmentBuildDiagram({
   cfg,
   mode,
-  paused,
+  paused = false,
   colors,
   fontsLoaded,
   compact = false,
-}) {
+}: EquipmentBuildDiagramProps): React.ReactElement {
   const [phaseMs, setPhaseMs] = useState(0);
-  const startRef = useRef(Date.now());
+  const startRef = useRef<number>(Date.now());
 
   // Reset assembly animation cleanly whenever weight or equipment mode changes
   useEffect(() => {
@@ -328,13 +357,12 @@ export default function EquipmentBuildDiagram({
 
   useEffect(() => {
     if (paused) return undefined;
-    let rafId;
+    let rafId = 0;
     let lastDraw = 0;
 
-    const tick = (now) => {
+    const tick = (now: number) => {
       const elapsed = Date.now() - startRef.current;
       const cycle = elapsed % 4800;
-      // Run smooth ~30fps during active sliding phase (0..1550ms), stay calm during hold (1550..4750ms)
       const shouldRender = cycle < 1600 || cycle > 4720;
       if (shouldRender && now - lastDraw >= 32) {
         lastDraw = now;
@@ -408,7 +436,7 @@ export default function EquipmentBuildDiagram({
         </Pressable>
       </View>
 
-      <View style={[styles.svgContainer, compact && styles.svgContainerCompact]}>
+      <View style={[styles.svgContainerBase, compact ? styles.svgContainerCompact : styles.svgContainerFixed]}>
         <Svg
           viewBox="0 0 360 124"
           width="100%"
@@ -632,15 +660,16 @@ const styles = StyleSheet.create({
   replayText: {
     fontSize: 12,
   },
-  svgContainer: {
+  svgContainerBase: {
     width: '100%',
-    height: 122,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  svgContainerFixed: {
+    height: 122,
+  },
   svgContainerCompact: {
     flex: 1,
-    height: undefined,
     minHeight: 82,
     maxHeight: 168,
   },
