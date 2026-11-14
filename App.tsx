@@ -35,6 +35,8 @@ import {
   Scales02,
   Sun,
   Trash01,
+  VolumeMax,
+  VolumeX,
 } from '@untitledui/icons';
 
 import { Tab, TabList, Tabs } from '@/components/application/tabs/tabs';
@@ -68,6 +70,12 @@ import {
 } from './src/components/workout/Modals';
 import { ProgressView } from './src/components/workout/ProgressView';
 import { StartWorkoutView } from './src/components/workout/StartWorkoutView';
+import {
+  playCountdownBeep,
+  playTimerFinishSound,
+  playTimerStartSound,
+  unlockAudio,
+} from './src/utils/sounds';
 import { isFirebaseConfigured } from './src/firebaseConfig';
 import {
   loadLocalState,
@@ -189,6 +197,12 @@ export default function App(): React.ReactElement {
   const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
   const [muscleFilter, setMuscleFilter] = useState<string>('all');
   const [animPaused, setAnimPaused] = useState<boolean>(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem('ai-trainer-sound') !== 'off';
+    }
+    return true;
+  });
 
   const [exModeOverrides, setExModeOverrides] = useState<Partial<Record<string, EquipmentMode>>>({});
 
@@ -196,6 +210,11 @@ export default function App(): React.ReactElement {
   const [timerSeconds, setTimerSeconds] = useState<number>(90);
   const [timerRunning, setTimerRunning] = useState<boolean>(false);
   const [timerFinished, setTimerFinished] = useState<boolean>(false);
+  const prevTimerRef = useRef<{ running: boolean; seconds: number; finished: boolean }>({
+    running: false,
+    seconds: 90,
+    finished: false,
+  });
 
   // Active workout clock tick
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
@@ -321,6 +340,37 @@ export default function App(): React.ReactElement {
     return () => clearInterval(id);
   }, [timerRunning]);
 
+  // Unlock Web Audio on first user interaction (essential for iOS Safari background interval ticks)
+  useEffect(() => {
+    if (!soundEnabled || Platform.OS !== 'web' || typeof window === 'undefined') return undefined;
+    const handleGesture = () => unlockAudio();
+    window.addEventListener('pointerdown', handleGesture, { passive: true, once: true });
+    window.addEventListener('keydown', handleGesture, { passive: true, once: true });
+    return () => {
+      window.removeEventListener('pointerdown', handleGesture);
+      window.removeEventListener('keydown', handleGesture);
+    };
+  }, [soundEnabled]);
+
+  // Trigger last-3-seconds countdown beeps (3, 2, 1) and finish bell (0)
+  useEffect(() => {
+    const prev = prevTimerRef.current;
+    if (soundEnabled) {
+      if (timerRunning && prev.running && timerSeconds !== prev.seconds) {
+        if (timerSeconds === 3 || timerSeconds === 2 || timerSeconds === 1) {
+          playCountdownBeep(timerSeconds);
+        }
+      } else if (!prev.finished && timerFinished) {
+        playTimerFinishSound();
+      }
+    }
+    prevTimerRef.current = {
+      running: timerRunning,
+      seconds: timerSeconds,
+      finished: timerFinished,
+    };
+  }, [timerRunning, timerSeconds, timerFinished, soundEnabled]);
+
   // Continuous running timer for the entire active workout (independent from per-set rest timer)
   useEffect(() => {
     if (workoutStartedAtMs === null) return undefined;
@@ -344,7 +394,21 @@ export default function App(): React.ReactElement {
     };
   }, [workoutStartedAtMs]);
 
+  const toggleSoundEnabled = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('ai-trainer-sound', next ? 'on' : 'off');
+    }
+    if (next) {
+      unlockAudio();
+      playTimerStartSound();
+    }
+  };
+
   const startTimer = (sec: number) => {
+    unlockAudio();
+    if (soundEnabled) playTimerStartSound();
     setTimerFinished(false);
     setTimerSeconds(sec);
     setTimerRunning(true);
@@ -354,6 +418,8 @@ export default function App(): React.ReactElement {
     if (timerRunning) {
       setTimerRunning(false);
     } else {
+      unlockAudio();
+      if (soundEnabled) playTimerStartSound();
       setTimerFinished(false);
       if (timerSeconds <= 0) setTimerSeconds(90);
       setTimerRunning(true);
@@ -539,6 +605,8 @@ export default function App(): React.ReactElement {
   };
 
   const startWorkout = (startExIdx = 0) => {
+    unlockAudio();
+    if (soundEnabled) playTimerStartSound();
     const targetTab: 'workoutA' | 'workoutB' | 'all' =
       currentTab === 'workoutA' || currentTab === 'workoutB' || currentTab === 'all'
         ? currentTab
@@ -998,6 +1066,14 @@ export default function App(): React.ReactElement {
               >
                 מדריך וציוד
               </Button>
+
+              <ButtonUtility
+                size="xs"
+                color="secondary"
+                icon={soundEnabled ? VolumeMax : VolumeX}
+                tooltip={soundEnabled ? 'השתק צלילי טיימר' : 'הפעל צלילי טיימר'}
+                onPress={toggleSoundEnabled}
+              />
 
               <ButtonUtility
                 size="xs"
