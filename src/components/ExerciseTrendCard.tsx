@@ -1,6 +1,15 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Line, Polyline, Circle, G, Text as SvgText } from 'react-native-svg';
+import {
+  Activity,
+  BarChart02,
+  CheckCircle,
+  Clock,
+  Minus,
+  TrendDown01,
+  TrendUp01,
+} from '@untitledui/icons';
+import { Badge, BadgeWithIcon } from '@/components/base/badges/badges';
 import { fontForWeight } from '../theme';
 import type { LoggedSet, ThemeColors, WorkoutSession } from '../types';
 
@@ -16,11 +25,15 @@ export interface ExerciseSessionSummary {
   sets: LoggedSet[];
 }
 
+export type TrendDirection = 'up' | 'down' | 'flat' | 'first' | 'empty';
+
 export interface ExerciseTrendSummary {
   sessions: ExerciseSessionSummary[];
   last: ExerciseSessionSummary | null;
   trendBg: string;
   trendFg: string;
+  trendColor: 'gray' | 'brand' | 'success' | 'error';
+  trendDirection: TrendDirection;
   strokeColor: string;
   trendLabel: string;
   shortLine: string;
@@ -63,9 +76,11 @@ export function getExerciseTrendSummary(
       last: null,
       trendBg: colors.secondary,
       trendFg: colors.secondaryForeground,
+      trendColor: 'gray',
+      trendDirection: 'empty',
       strokeColor: colors.primary,
-      trendLabel: '🆕 אין היסטוריה שמורה עדיין',
-      shortLine: '🆕 עדיין לא בוצע אימון שמור לתרגיל זה',
+      trendLabel: 'אין היסטוריה שמורה עדיין',
+      shortLine: 'עדיין לא בוצע אימון שמור לתרגיל זה',
     };
   }
 
@@ -75,8 +90,10 @@ export function getExerciseTrendSummary(
 
   let trendBg = colors.primarySoft;
   let trendFg = colors.primary;
+  let trendColor: 'gray' | 'brand' | 'success' | 'error' = 'brand';
+  let trendDirection: TrendDirection = 'first';
   let strokeColor = colors.primary;
-  let trendLabel = '🌱 אימון ראשון מתועד – בפעם הבאה תופיע כאן מגמת השינוי';
+  let trendLabel = 'אימון ראשון מתועד – בפעם הבאה תופיע כאן מגמת השינוי';
   let shortDelta = 'אימון ראשון מתועד';
 
   if (prev) {
@@ -91,33 +108,43 @@ export function getExerciseTrendSummary(
     if (deltaW > 0) {
       trendBg = colors.successSoft;
       trendFg = colors.success;
+      trendColor = 'success';
+      trendDirection = 'up';
       strokeColor = colors.success;
-      trendLabel = `📈 מגמת עלייה: +${deltaW} קילוגרם מהאימון שלפני${overallSuffix}`;
-      shortDelta = `📈 +${deltaW} קילוגרם מהפעם שלפני`;
+      trendLabel = `מגמת עלייה: +${deltaW} קילוגרם מהאימון שלפני${overallSuffix}`;
+      shortDelta = `+${deltaW} קילוגרם מהפעם שלפני`;
     } else if (deltaW < 0) {
       trendBg = colors.dangerSoft;
       trendFg = colors.danger;
+      trendColor = 'error';
+      trendDirection = 'down';
       strokeColor = colors.danger;
-      trendLabel = `📉 ירידה של ${Math.abs(deltaW)} קילוגרם מהאימון שלפני${overallSuffix}`;
-      shortDelta = `📉 ${deltaW} קילוגרם מהפעם שלפני`;
+      trendLabel = `ירידה של ${Math.abs(deltaW)} קילוגרם מהאימון שלפני${overallSuffix}`;
+      shortDelta = `${deltaW} קילוגרם מהפעם שלפני`;
     } else if (deltaReps > 0) {
       trendBg = colors.successSoft;
       trendFg = colors.success;
+      trendColor = 'success';
+      trendDirection = 'up';
       strokeColor = colors.success;
-      trendLabel = `📈 מגמת שיפור: +${deltaReps} חזרות באותו משקל (${last.bestWeight} קילוגרם)${overallSuffix}`;
-      shortDelta = `📈 +${deltaReps} חזרות באותו משקל`;
+      trendLabel = `מגמת שיפור: +${deltaReps} חזרות באותו משקל (${last.bestWeight} קילוגרם)${overallSuffix}`;
+      shortDelta = `+${deltaReps} חזרות באותו משקל`;
     } else if (deltaReps < 0) {
       trendBg = colors.secondary;
       trendFg = colors.secondaryForeground;
+      trendColor = 'gray';
+      trendDirection = 'flat';
       strokeColor = colors.primary;
-      trendLabel = `➡️ משקל זהה (${last.bestWeight} קילוגרם), ${deltaReps} חזרות מהפעם שלפני${overallSuffix}`;
-      shortDelta = '➡️ משקל זהה';
+      trendLabel = `משקל זהה (${last.bestWeight} קילוגרם), ${deltaReps} חזרות מהפעם שלפני${overallSuffix}`;
+      shortDelta = 'משקל זהה';
     } else {
       trendBg = colors.primarySoft;
       trendFg = colors.primary;
+      trendColor = 'brand';
+      trendDirection = 'flat';
       strokeColor = colors.primary;
-      trendLabel = `➡️ מגמה יציבה: שמירה על ${last.bestWeight} קילוגרם × ${last.bestReps} חזרות${overallSuffix}`;
-      shortDelta = '➡️ מגמה יציבה';
+      trendLabel = `מגמה יציבה: שמירה על ${last.bestWeight} קילוגרם × ${last.bestReps} חזרות${overallSuffix}`;
+      shortDelta = 'מגמה יציבה';
     }
   }
 
@@ -131,9 +158,11 @@ export function getExerciseTrendSummary(
     last,
     trendBg,
     trendFg,
+    trendColor,
+    trendDirection,
     strokeColor,
     trendLabel,
-    shortLine: `📌 פעם קודמת (${last.dateShort}): ${lastSummary}  •  ${shortDelta}`,
+    shortLine: `פעם קודמת (${last.dateShort}): ${lastSummary} • ${shortDelta}`,
   };
 }
 
@@ -155,58 +184,57 @@ export default function ExerciseTrendCard({
   compact = false,
 }: ExerciseTrendCardProps): React.ReactElement {
   const fReg = fontForWeight('regular', fontsLoaded);
-  const fSemi = fontForWeight('semibold', fontsLoaded);
   const fBold = fontForWeight('bold', fontsLoaded);
 
-  const { sessions, last, trendBg, trendFg, strokeColor, trendLabel } =
+  const { sessions, last, trendColor, trendDirection, strokeColor, trendLabel } =
     getExerciseTrendSummary(exerciseId, workoutHistory, colors);
+
+  const TrendIcon =
+    trendDirection === 'up'
+      ? TrendUp01
+      : trendDirection === 'down'
+      ? TrendDown01
+      : trendDirection === 'first'
+      ? Activity
+      : Minus;
 
   if (!last) {
     return (
-      <View
-        style={[
-          styles.card,
-          compact && { padding: 9 },
-          { backgroundColor: colors.background, borderColor: colors.border },
-        ]}
+      <div
+        className={`flex flex-col gap-1.5 rounded-xl bg-secondary_alt ring-1 ring-secondary ${
+          compact ? 'px-3 py-2' : 'p-3.5'
+        }`}
       >
-        <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: colors.foreground, fontFamily: fBold }]}>
-            📊 מה עשית בפעם הקודמת ומגמת התקדמות
-          </Text>
-          <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
-            <Text
-              style={[
-                styles.badgeText,
-                { color: colors.secondaryForeground, fontFamily: fSemi },
-              ]}
-            >
-              🆕 אין היסטוריה שמורה עדיין
-            </Text>
-          </View>
-        </View>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+            <BarChart02 className="size-4 text-fg-brand-primary" />
+            <span>מה עשית בפעם הקודמת ומגמת התקדמות</span>
+          </div>
+          <Badge size="sm" color="gray">
+            {trendLabel}
+          </Badge>
+        </div>
         {!compact && (
-          <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: fReg }]}>
+          <p className="text-xs leading-relaxed text-tertiary">
             בסיום האימון, סמן סטים שבוצעו ולחץ על שמירת אימון כדי לראות כאן את המשקל האחרון ואת גרף המגמה לתרגיל זה.
-          </Text>
+          </p>
         )}
-      </View>
+      </div>
     );
   }
 
   const liveRounded = roundWeight(liveBestWeight);
   const liveDelta = roundWeight(liveRounded - last.bestWeight);
-  let liveComparisonText = `✓ היום מוגדר: ${liveRounded} קילוגרם (זהה לפעם הקודמת)`;
-  let liveComparisonColor = colors.mutedForeground;
+  let liveComparisonText = `היום מוגדר: ${liveRounded} קילוגרם (זהה לפעם הקודמת)`;
+  let liveComparisonTone = 'text-tertiary';
   if (liveDelta > 0) {
-    liveComparisonText = `🚀 היום מוגדר: ${liveRounded} קילוגרם (+${liveDelta} קילוגרם יותר מהפעם הקודמת!)`;
-    liveComparisonColor = colors.success;
+    liveComparisonText = `היום מוגדר: ${liveRounded} קילוגרם (+${liveDelta} קילוגרם יותר מהפעם הקודמת)`;
+    liveComparisonTone = 'text-success-primary';
   } else if (liveDelta < 0) {
-    liveComparisonText = `🎯 היום מוגדר: ${liveRounded} קילוגרם (${liveDelta} קילוגרם מהפעם הקודמת)`;
-    liveComparisonColor = colors.foreground;
+    liveComparisonText = `היום מוגדר: ${liveRounded} קילוגרם (${liveDelta} קילוגרם מהפעם הקודמת)`;
+    liveComparisonTone = 'text-secondary';
   }
 
-  // Mini Sparkline of last up to 6 workouts
   const recent = sessions.slice(-6);
   const W = 280;
   const H = 96;
@@ -228,64 +256,53 @@ export default function ExerciseTrendCard({
   const poly = pts.map((p) => `${p.x},${p.y}`).join(' ');
 
   return (
-    <View
-      style={[
-        styles.card,
-        compact && { padding: 9, gap: 4 },
-        { backgroundColor: colors.background, borderColor: colors.border },
-      ]}
+    <div
+      className={`rounded-xl bg-secondary_alt ring-1 ring-secondary ${
+        compact ? 'px-3 py-2' : 'p-3.5'
+      }`}
     >
-      <View style={styles.topSplit}>
-        <View style={[styles.infoCol, compact && { gap: 4 }]}>
-          <Text style={[styles.title, { color: colors.foreground, fontFamily: fBold }]}>
-            📌 מה היה בפעם הקודמת ({last.dateShort})
-          </Text>
+      <div className="flex flex-wrap items-stretch justify-between gap-3">
+        <div className="flex min-w-56 flex-1 flex-col justify-center gap-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+            <Clock className="size-3.5 text-fg-brand-primary" />
+            <span>מה היה בפעם הקודמת ({last.dateShort})</span>
+          </div>
 
-          <View style={styles.statsRow}>
-            <View
-              style={[
-                styles.bigWeightPill,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <Text style={[styles.bigWeightText, { color: colors.foreground, fontFamily: fBold }]}>
-                {last.bestWeight === 0
-                  ? `משקל גוף × ${last.bestReps} חזרות`
-                  : `${last.bestWeight} קילוגרם × ${last.bestReps} חזרות`}
-              </Text>
-            </View>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge type="modern" color="gray" size="sm">
+              {last.bestWeight === 0
+                ? `משקל גוף × ${last.bestReps} חזרות`
+                : `${last.bestWeight} קילוגרם × ${last.bestReps} חזרות`}
+            </Badge>
 
-            <View style={[styles.badge, { backgroundColor: trendBg }]}>
-              <Text style={[styles.badgeText, { color: trendFg, fontFamily: fBold }]}>
-                {trendLabel}
-              </Text>
-            </View>
-          </View>
+            <BadgeWithIcon size="sm" color={trendColor} iconLeading={TrendIcon}>
+              {trendLabel}
+            </BadgeWithIcon>
+          </div>
 
           {!compact && (
-            <Text style={[styles.setsBreakdown, { color: colors.mutedForeground, fontFamily: fReg }]}>
+            <p className="text-xs text-tertiary">
               סטים מהפעם הקודמת:{' '}
-              {last.sets.map((s) => `${s.weight} קילוגרם (${s.reps} חזרות)`).join('  •  ')}
-            </Text>
+              {last.sets.map((s) => `${s.weight} קילוגרם (${s.reps} חזרות)`).join(' • ')}
+            </p>
           )}
 
-          <Text style={[styles.liveCompareText, { color: liveComparisonColor, fontFamily: fSemi }]}>
-            {liveComparisonText}
-          </Text>
-        </View>
+          <div className={`flex items-center gap-1 text-xs font-medium ${liveComparisonTone}`}>
+            <CheckCircle className="size-3.5 shrink-0" />
+            <span>{liveComparisonText}</span>
+          </div>
+        </div>
 
         {recent.length >= 2 && (
-          <View
-            style={[
-              styles.sparkWrap,
-              compact && { width: 220, paddingVertical: 4 },
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
+          <div
+            className={`flex flex-col justify-center rounded-lg bg-primary px-2 py-1 ring-1 ring-secondary ${
+              compact ? 'w-52' : 'w-64'
+            } max-w-full`}
           >
-            <Text style={[styles.sparkTitle, { color: colors.mutedForeground, fontFamily: fSemi }]}>
+            <span className="text-center text-[11px] font-medium text-tertiary">
               מגמת {recent.length} האימונים האחרונים
-            </Text>
-            <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height={compact ? 66 : 92}>
+            </span>
+            <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height={compact ? 64 : 88}>
               <Line
                 x1={padX}
                 y1={H - padY}
@@ -332,100 +349,9 @@ export default function ExerciseTrendCard({
                 </G>
               ))}
             </Svg>
-          </View>
+          </div>
         )}
-      </View>
-    </View>
+      </div>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    gap: 8,
-  },
-  headerRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  topSplit: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 12,
-    alignItems: 'stretch',
-  },
-  infoCol: {
-    flex: 1,
-    minWidth: 230,
-    gap: 6,
-  },
-  title: {
-    fontSize: 13,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  emptySub: {
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  statsRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-  },
-  bigWeightPill: {
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  bigWeightText: {
-    fontSize: 13,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 9,
-  },
-  badgeText: {
-    fontSize: 12,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  setsBreakdown: {
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  liveCompareText: {
-    fontSize: 12,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  sparkWrap: {
-    width: 260,
-    maxWidth: '100%',
-    flexGrow: 1,
-    borderWidth: 1,
-    borderRadius: 11,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    justifyContent: 'center',
-  },
-  sparkTitle: {
-    fontSize: 11,
-    textAlign: 'center',
-    writingDirection: 'rtl',
-  },
-});

@@ -1,19 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  TextInput,
-  Linking,
-  Share,
-  Platform,
-  SafeAreaView,
-  Modal,
-  useColorScheme,
-  useWindowDimensions,
-} from 'react-native';
+import { Platform, Share, useColorScheme, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import type { User } from 'firebase/auth';
 import {
@@ -23,25 +9,61 @@ import {
   Rubik_600SemiBold,
   Rubik_700Bold,
 } from '@expo-google-fonts/rubik';
+import {
+  Activity,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
+  Award01,
+  BarChartSquare02,
+  BookOpen01,
+  Check,
+  CheckCircle,
+  ChevronDown,
+  Clock,
+  Flag01,
+  Link03,
+  List,
+  Minus,
+  Moon01,
+  PauseCircle,
+  PlayCircle,
+  Plus,
+  RefreshCw01,
+  Repeat02,
+  Save01,
+  Scales02,
+  Sun,
+} from '@untitledui/icons';
 
-import { lightColors, darkColors, fontForWeight } from './src/theme';
+import { Tab, TabList, Tabs } from '@/components/application/tabs/tabs';
+import { Badge, BadgeWithDot, BadgeWithIcon } from '@/components/base/badges/badges';
+import { ButtonGroup, ButtonGroupItem } from '@/components/base/button-group/button-group';
+import { Button } from '@/components/base/buttons/button';
+import { ButtonUtility } from '@/components/base/buttons/button-utility';
+import { FeaturedIcon } from '@/components/foundations/featured-icon/featured-icon';
+
+import { lightColors, darkColors } from './src/theme';
 import {
   EXERCISES,
-  EQUIPMENT_SUMMARY_ITEMS,
-  GLOSSARY_ITEMS,
-  WEEKLY_SCHEDULE,
   SETUP_MESSAGES,
   WORKOUT_NAMES_MAP,
   MUSCLE_FILTERS,
   buildConfigsForMode,
   snapToSupportedWeight,
-  describeConfigSetup,
 } from './src/data/exercises';
 import ExerciseAnimation from './src/components/ExerciseAnimation';
 import EquipmentBuildDiagram from './src/components/EquipmentBuildDiagram';
-import ExerciseTrendCard, { getExerciseTrendSummary } from './src/components/ExerciseTrendCard';
+import ExerciseTrendCard from './src/components/ExerciseTrendCard';
 import ExerciseGifIcon from './src/components/ExerciseGifIcon';
-import ProgressChart from './src/components/ProgressChart';
+import {
+  ExerciseStepsModal,
+  ExerciseSwitcherModal,
+  GuideModal,
+  SaveWorkoutModal,
+  WeightsPickerModal,
+} from './src/components/workout/Modals';
+import { ProgressView } from './src/components/workout/ProgressView';
 import { isFirebaseConfigured } from './src/firebaseConfig';
 import {
   loadLocalState,
@@ -90,8 +112,18 @@ const CONFIG_CACHE: Record<EquipmentMode, PlateConfig[]> = {
 };
 
 export default function App(): React.ReactElement {
-  const scheme = useColorScheme();
-  const colors = scheme === 'dark' ? darkColors : lightColors;
+  const systemScheme = useColorScheme();
+  const [themePref, setThemePref] = useState<'system' | 'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('ai-trainer-theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+    }
+    return 'system';
+  });
+  const isDark =
+    themePref === 'dark' || (themePref === 'system' && systemScheme === 'dark');
+  const colors = isDark ? darkColors : lightColors;
+
   const { width } = useWindowDimensions();
   const isWide = width >= 760;
 
@@ -114,9 +146,7 @@ export default function App(): React.ReactElement {
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
   const [muscleFilter, setMuscleFilter] = useState<string>('all');
   const [animPaused, setAnimPaused] = useState<boolean>(false);
-  const exerciseScrollRef = useRef<React.ComponentRef<typeof ScrollView> | null>(null);
 
-  // Optional per-exercise mode override (e.g. ex1 Floor Press can toggle pair <-> barbell)
   const [exModeOverrides, setExModeOverrides] = useState<Partial<Record<string, EquipmentMode>>>({});
 
   // Rest timer state
@@ -150,11 +180,11 @@ export default function App(): React.ReactElement {
     }
   }, []);
 
-  // Keep html, body, #root, and iOS Safari theme-color synced with dark/light theme background
+  // Sync Untitled UI `.dark-mode` class + browser chrome with dark/light mode
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const bg = colors.background;
-      const isDark = scheme === 'dark';
+      document.documentElement.classList.toggle('dark-mode', isDark);
       document.documentElement.style.backgroundColor = bg;
       document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
       if (document.body) {
@@ -172,7 +202,15 @@ export default function App(): React.ReactElement {
       }
       metaTheme.setAttribute('content', colors.card);
     }
-  }, [scheme, colors.background, colors.card]);
+  }, [isDark, colors.background, colors.card]);
+
+  const toggleThemeMode = () => {
+    const next: 'light' | 'dark' = isDark ? 'light' : 'dark';
+    setThemePref(next);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('ai-trainer-theme', next);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -275,10 +313,7 @@ export default function App(): React.ReactElement {
     const existing = activeDraft[key];
     if (isSetEntry(existing)) {
       const snapped = snapToSupportedWeight(existing.weight, configs);
-      return {
-        ...existing,
-        weight: snapped,
-      };
+      return { ...existing, weight: snapped };
     }
     const last = getLastExerciseLog(ex.id);
     let rawWeight = ex.defaultWeight;
@@ -309,15 +344,13 @@ export default function App(): React.ReactElement {
   const setExerciseEquipmentMode = (ex: Exercise, nextMode: EquipmentMode) => {
     setExModeOverrides((prev) => ({ ...prev, [ex.id]: nextMode }));
     const nextConfigs = CONFIG_CACHE[nextMode] || CONFIG_CACHE.pair;
-    const effectiveSets = ex.sets;
     const updated: ActiveDraft = {
       ...activeDraft,
       [`__mode_${ex.id}`]: { mode: nextMode },
     };
-    for (let s = 1; s <= effectiveSets; s++) {
-      const key = `${ex.id}-${s}`;
+    for (let s = 1; s <= ex.sets; s++) {
       const cur = getSetEntry(ex, s);
-      updated[key] = {
+      updated[`${ex.id}-${s}`] = {
         ...cur,
         weight: snapToSupportedWeight(cur.weight, nextConfigs),
       };
@@ -325,41 +358,33 @@ export default function App(): React.ReactElement {
     persistDraft(updated);
   };
 
-  // Step weight strictly along the supported home-equipment weights array!
   const stepSupportedWeight = (ex: Exercise, setNum: number, direction: number) => {
     const configs = getConfigsForExercise(ex);
     const cur = getSetEntry(ex, setNum);
     let idx = configs.findIndex((c) => c.totalWeight === cur.weight);
     if (idx === -1) {
       const snapped = snapToSupportedWeight(cur.weight, configs);
-      idx = Math.max(
-        0,
-        configs.findIndex((c) => c.totalWeight === snapped)
-      );
+      idx = Math.max(0, configs.findIndex((c) => c.totalWeight === snapped));
     }
     const nextIdx = Math.max(0, Math.min(configs.length - 1, idx + direction));
-    const key = `${ex.id}-${setNum}`;
     persistDraft({
       ...activeDraft,
-      [key]: { ...cur, weight: configs[nextIdx].totalWeight },
+      [`${ex.id}-${setNum}`]: { ...cur, weight: configs[nextIdx].totalWeight },
     });
   };
 
   const selectWeightForSet = (ex: Exercise, setNum: number, exactWeight: number) => {
     const cur = getSetEntry(ex, setNum);
-    const key = `${ex.id}-${setNum}`;
     persistDraft({
       ...activeDraft,
-      [key]: { ...cur, weight: exactWeight },
+      [`${ex.id}-${setNum}`]: { ...cur, weight: exactWeight },
     });
   };
 
-  // Apply chosen supported weight to all uncompleted sets of this exercise (or all sets if all done)
   const selectWeightForExercise = (ex: Exercise, exactWeight: number) => {
-    const effectiveSets = ex.sets;
     const updated: ActiveDraft = { ...activeDraft };
     let changedAny = false;
-    for (let s = 1; s <= effectiveSets; s++) {
+    for (let s = 1; s <= ex.sets; s++) {
       const cur = getSetEntry(ex, s);
       if (!cur.done) {
         updated[`${ex.id}-${s}`] = { ...cur, weight: exactWeight };
@@ -367,7 +392,7 @@ export default function App(): React.ReactElement {
       }
     }
     if (!changedAny) {
-      for (let s = 1; s <= effectiveSets; s++) {
+      for (let s = 1; s <= ex.sets; s++) {
         const cur = getSetEntry(ex, s);
         updated[`${ex.id}-${s}`] = { ...cur, weight: exactWeight };
       }
@@ -376,33 +401,30 @@ export default function App(): React.ReactElement {
   };
 
   const stepReps = (ex: Exercise, setNum: number, delta: number) => {
-    const key = `${ex.id}-${setNum}`;
     const cur = getSetEntry(ex, setNum);
     const nextVal = Math.max(1, Math.round((Number(cur.reps) || 1) + delta));
     persistDraft({
       ...activeDraft,
-      [key]: { ...cur, reps: nextVal },
+      [`${ex.id}-${setNum}`]: { ...cur, reps: nextVal },
     });
   };
 
   const updateRepsText = (ex: Exercise, setNum: number, raw: string) => {
-    const key = `${ex.id}-${setNum}`;
     const cur = getSetEntry(ex, setNum);
     const parsed = parseInt(raw, 10);
     const nextVal = Number.isNaN(parsed) || parsed < 1 ? 1 : Math.min(200, parsed);
     persistDraft({
       ...activeDraft,
-      [key]: { ...cur, reps: nextVal },
+      [`${ex.id}-${setNum}`]: { ...cur, reps: nextVal },
     });
   };
 
   const toggleSetDone = (ex: Exercise, setNum: number) => {
-    const key = `${ex.id}-${setNum}`;
     const cur = getSetEntry(ex, setNum);
     const nextDone = !cur.done;
     persistDraft({
       ...activeDraft,
-      [key]: { ...cur, done: nextDone },
+      [`${ex.id}-${setNum}`]: { ...cur, done: nextDone },
     });
     if (nextDone) {
       startTimer(ex.restSec);
@@ -445,9 +467,8 @@ export default function App(): React.ReactElement {
     let doneCount = 0;
     let totalCount = 0;
     visibleExercises.forEach((ex) => {
-      const effectiveSets = ex.sets;
-      totalCount += effectiveSets;
-      for (let s = 1; s <= effectiveSets; s++) {
+      totalCount += ex.sets;
+      for (let s = 1; s <= ex.sets; s++) {
         if (getSetEntry(ex, s).done) doneCount++;
       }
     });
@@ -459,9 +480,8 @@ export default function App(): React.ReactElement {
     let sessionTotalSets = 0;
 
     visibleExercises.forEach((ex) => {
-      const effectiveSets = ex.sets;
       const doneSets: LoggedSet[] = [];
-      for (let s = 1; s <= effectiveSets; s++) {
+      for (let s = 1; s <= ex.sets; s++) {
         const entry = getSetEntry(ex, s);
         if (entry.done) {
           doneSets.push({
@@ -473,18 +493,14 @@ export default function App(): React.ReactElement {
       }
       if (doneSets.length > 0) {
         sessionTotalSets += doneSets.length;
-        items.push({
-          exId: ex.id,
-          exName: ex.name,
-          sets: doneSets,
-        });
+        items.push({ exId: ex.id, exName: ex.name, sets: doneSets });
       }
     });
 
     if (items.length === 0) {
       setSaveFeedback({
         error: true,
-        text: '⚠️ סמן לפחות סט אחד שבוצע ("בוצע ✓") לפני שמירת האימון ביומן.',
+        text: 'סמן לפחות סט אחד שבוצע לפני שמירת האימון ביומן.',
       });
       return;
     }
@@ -522,7 +538,7 @@ export default function App(): React.ReactElement {
       try {
         await saveWorkoutToCloud(firebaseUser.uid, sessionDoc);
       } catch {
-        // Local copy already saved
+        // Local copy saved
       }
     }
 
@@ -656,17 +672,6 @@ export default function App(): React.ReactElement {
     };
   }, [sortedHistoryDesc]);
 
-  const fReg = fontForWeight('regular', fontsLoaded);
-  const fMed = fontForWeight('medium', fontsLoaded);
-  const fSemi = fontForWeight('semibold', fontsLoaded);
-  const fBold = fontForWeight('bold', fontsLoaded);
-
-  const navTabs: { key: WorkoutTabKey; label: string; mobileLabel: string }[] = [
-    { key: 'workoutA', label: 'אימון A: חזה, גב וזרועות', mobileLabel: 'אימון A' },
-    { key: 'workoutB', label: 'אימון B: כתפיים, גב וזרועות', mobileLabel: 'אימון B' },
-    { key: 'all', label: 'כל התרגילים', mobileLabel: 'כל התרגילים' },
-  ];
-
   const selectMainTab = (nextTab: WorkoutTabKey) => {
     setSaveFeedback(null);
     setExerciseDropdownOpen(false);
@@ -678,12 +683,6 @@ export default function App(): React.ReactElement {
     setCurrentTab(nextTab);
     setCurrentExerciseIdx(0);
     setCurrentSetIdx(0);
-    if (
-      exerciseScrollRef.current &&
-      typeof exerciseScrollRef.current.scrollTo === 'function'
-    ) {
-      exerciseScrollRef.current.scrollTo({ y: 0, animated: false });
-    }
   };
 
   const isWorkoutTab = currentTab !== 'progress';
@@ -699,8 +698,7 @@ export default function App(): React.ReactElement {
     if (visibleExercises.length === 0) return;
     const clamped = Math.max(0, Math.min(visibleExercises.length - 1, nextIdx));
     const targetEx = visibleExercises[clamped];
-    const targetSets = targetEx.sets;
-    const clampedSet = Math.max(0, Math.min(targetSets - 1, setIdxOverride));
+    const clampedSet = Math.max(0, Math.min(targetEx.sets - 1, setIdxOverride));
     setWeightsModalOpen(false);
     setExerciseStepsModalOpen(false);
     setCurrentExerciseIdx(clamped);
@@ -712,8 +710,7 @@ export default function App(): React.ReactElement {
       setCurrentSetIdx(safeSetIdx - 1);
     } else if (safeExIdx > 0) {
       const prevEx = visibleExercises[safeExIdx - 1];
-      const prevSets = prevEx.sets;
-      goToExercise(safeExIdx - 1, prevSets - 1);
+      goToExercise(safeExIdx - 1, prevEx.sets - 1);
     }
   };
 
@@ -733,3929 +730,922 @@ export default function App(): React.ReactElement {
     visibleExercises.length > 0 &&
     safeExIdx === visibleExercises.length - 1 &&
     safeSetIdx === activeEffectiveSets - 1;
-  const prevBtnLabel = safeSetIdx > 0 ? '→ סט קודם' : '→ תרגיל קודם';
+  const prevBtnLabel = safeSetIdx > 0 ? 'סט קודם' : 'תרגיל קודם';
   const nextBtnLabel = isAtVeryEnd
-    ? '🏁 סיום ושמירה'
+    ? 'סיום ושמירה'
     : safeSetIdx < activeEffectiveSets - 1
-    ? 'סט הבא ←'
-    : 'תרגיל הבא ←';
+    ? 'סט הבא'
+    : 'תרגיל הבא';
 
   const currentSetupMessage =
     currentTab === 'workoutA' || currentTab === 'workoutB'
       ? SETUP_MESSAGES[currentTab]
       : undefined;
 
-  // Helper returning completion ratio for an exercise dot/pill
   const getExerciseDoneStats = (ex: Exercise) => {
-    const effectiveSets = ex.sets;
     let doneCount = 0;
     let bestWeightToday = 0;
-    for (let s = 1; s <= effectiveSets; s++) {
+    for (let s = 1; s <= ex.sets; s++) {
       const entry = getSetEntry(ex, s);
       if (entry.done) doneCount++;
       if (s === 1 || entry.weight > bestWeightToday) bestWeightToday = entry.weight;
     }
     return {
       doneCount,
-      effectiveSets,
-      allDone: effectiveSets > 0 && doneCount === effectiveSets,
+      effectiveSets: ex.sets,
+      allDone: ex.sets > 0 && doneCount === ex.sets,
       bestWeightToday,
     };
   };
 
+  const showGoogleConnect =
+    Platform.OS === 'web' &&
+    isFirebaseConfigured() &&
+    (!firebaseUser || firebaseUser.isAnonymous);
+
   return (
-    <SafeAreaView
-      style={[
-        styles.safeRoot,
-        Platform.OS === 'web' ? styles.webFullscreenRoot : null,
-        { backgroundColor: colors.background },
-      ]}
+    <div
+      dir="rtl"
+      className="flex h-full w-full flex-col overflow-hidden bg-secondary_alt text-primary"
     >
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
-      {/* PINNED COMPACT TOP BAR (Header, Tabs, Exercise Stepper) */}
-      <View
-        style={[
-          styles.topShell,
-          !isWide && styles.topShellMobile,
-          { backgroundColor: colors.card, borderBottomColor: colors.border },
-        ]}
-      >
-        {/* Row 1: Compact Title + Sync + Utility Buttons */}
-        <View style={[styles.topRow1, !isWide && styles.topRow1Mobile]}>
-          <View style={[styles.topBrandTitleRow, !isWide && styles.topBrandTitleRowMobile]}>
-            <View style={styles.topBrandLeftGroup}>
-              <Text
-                numberOfLines={1}
-                style={[styles.compactTitle, { color: colors.foreground, fontFamily: fBold }]}
-              >
-                🤖 AI Trainer
-              </Text>
+      {/* PINNED COMPACT TOP HEADER BAR */}
+      <header className="shrink-0 border-b border-secondary bg-primary px-2.5 py-1.5 sm:px-4 sm:py-2.5">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-1.5 sm:gap-2">
+          {/* Row 1: Brand + Sync + Actions */}
+          <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+            <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+              <FeaturedIcon icon={Activity} size="sm" color="brand" theme="modern" />
+              <span className="truncate text-sm font-bold text-primary sm:text-md">AI Trainer</span>
               {isWide && (
-                <View style={[styles.compactSyncBadge, { backgroundColor: colors.primarySoft }]}>
-                  <Text style={[styles.compactSyncText, { color: colors.primary, fontFamily: fSemi }]}>
-                    מאמן כוח חכם
-                  </Text>
-                </View>
+                <Badge size="sm" color="brand">
+                  מאמן כוח חכם
+                </Badge>
               )}
-              <View
-                style={[
-                  styles.compactSyncBadge,
-                  {
-                    backgroundColor:
-                      syncStatus.mode === 'cloud' ? colors.successSoft : colors.secondary,
-                  },
-                ]}
-              >
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.compactSyncText,
-                    {
-                      color:
-                        syncStatus.mode === 'cloud' ? colors.success : colors.mutedForeground,
-                      fontFamily: fSemi,
-                    },
-                  ]}
-                >
-                  {isWide
-                    ? `☁️ ${syncStatus.message}`
-                    : syncStatus.mode === 'cloud'
-                    ? '☁️ מסונכרן'
+              <BadgeWithDot
+                size="sm"
+                color={
+                  syncStatus.mode === 'cloud'
+                    ? 'success'
                     : syncStatus.mode === 'connecting'
-                    ? '☁️ מתחבר...'
-                    : '📱 מקומי'}
-                </Text>
-              </View>
-            </View>
-
-            {!isWide &&
-              Platform.OS === 'web' &&
-              isFirebaseConfigured() &&
-              (!firebaseUser || firebaseUser.isAnonymous) && (
-                <Pressable
-                  onPress={handleGoogleSignIn}
-                  style={[
-                    styles.utilityBtnCompact,
-                    { backgroundColor: colors.background, borderColor: colors.primary },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.utilityBtnText,
-                      { color: colors.primary, fontFamily: fSemi },
-                    ]}
-                  >
-                    🔗 Google
-                  </Text>
-                </Pressable>
-              )}
-          </View>
-
-          <View style={[styles.topUtilityRow, !isWide && styles.topUtilityRowMobile]}>
-            {/* Dedicated Show My Progress button */}
-            <Pressable
-              onPress={() =>
-                selectMainTab(currentTab === 'progress' ? lastNonProgressTab : 'progress')
-              }
-              style={[
-                isWide ? styles.dedicatedActionBtn : styles.dedicatedActionBtnMobile,
-                {
-                  backgroundColor:
-                    currentTab === 'progress' ? colors.primary : colors.primarySoft,
-                  borderColor: colors.primary,
-                },
-              ]}
-            >
-              <Text
-                numberOfLines={1}
-                style={[
-                  styles.dedicatedActionText,
-                  {
-                    color:
-                      currentTab === 'progress' ? colors.primaryForeground : colors.primary,
-                    fontFamily: fBold,
-                  },
-                ]}
+                    ? 'brand'
+                    : 'gray'
+                }
               >
                 {isWide
-                  ? `📈 ההתקדמות שלי (${sortedHistoryDesc.length})`
-                  : `📈 ההתקדמות שלי (${sortedHistoryDesc.length})`}
-              </Text>
-            </Pressable>
+                  ? syncStatus.message
+                  : syncStatus.mode === 'cloud'
+                  ? 'מסונכרן'
+                  : syncStatus.mode === 'connecting'
+                  ? 'מתחבר'
+                  : 'מקומי'}
+              </BadgeWithDot>
+            </div>
 
-            {/* Dedicated Guide & Equipment button */}
-            <Pressable
-              onPress={() => setGuideModalOpen(true)}
-              style={[
-                isWide ? styles.dedicatedActionBtn : styles.dedicatedActionBtnMobile,
-                {
-                  backgroundColor: guideModalOpen ? colors.primary : colors.secondary,
-                  borderColor: guideModalOpen ? colors.primary : colors.border,
-                },
-              ]}
-            >
-              <Text
-                numberOfLines={1}
-                style={[
-                  styles.dedicatedActionText,
-                  {
-                    color: guideModalOpen
-                      ? colors.primaryForeground
-                      : colors.secondaryForeground,
-                    fontFamily: fBold,
-                  },
-                ]}
+            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
+              <Button
+                size="xs"
+                color={currentTab === 'progress' ? 'primary' : 'secondary'}
+                iconLeading={BarChartSquare02}
+                onPress={() =>
+                  selectMainTab(currentTab === 'progress' ? lastNonProgressTab : 'progress')
+                }
               >
-                📖 מדריך וציוד
-              </Text>
-            </Pressable>
+                ההתקדמות שלי ({sortedHistoryDesc.length})
+              </Button>
 
-            <Pressable
-              onPress={() => setAnimPaused((p) => !p)}
-              style={[
-                isWide ? styles.utilityBtn : styles.utilityBtnCompact,
-                { backgroundColor: colors.background, borderColor: colors.border },
-              ]}
-            >
-              <Text
-                numberOfLines={1}
-                style={[styles.utilityBtnText, { color: colors.foreground, fontFamily: fMed }]}
+              <Button
+                size="xs"
+                color={guideModalOpen ? 'primary' : 'secondary'}
+                iconLeading={BookOpen01}
+                onPress={() => setGuideModalOpen(true)}
               >
-                {isWide ? (animPaused ? '▶ אנימציה' : '⏸ אנימציה') : animPaused ? '▶' : '⏸'}
-              </Text>
-            </Pressable>
+                מדריך וציוד
+              </Button>
 
-            {isWide &&
-              Platform.OS === 'web' &&
-              isFirebaseConfigured() &&
-              (!firebaseUser || firebaseUser.isAnonymous) && (
-                <Pressable
+              <ButtonUtility
+                size="xs"
+                color="secondary"
+                icon={animPaused ? PlayCircle : PauseCircle}
+                tooltip={animPaused ? 'הפעל אנימציה' : 'השהה אנימציה'}
+                onPress={() => setAnimPaused((p) => !p)}
+              />
+
+              <ButtonUtility
+                size="xs"
+                color="secondary"
+                icon={isDark ? Sun : Moon01}
+                tooltip={isDark ? 'מצב בהיר' : 'מצב כהה'}
+                onPress={toggleThemeMode}
+              />
+
+              {showGoogleConnect && (
+                <Button
+                  size="xs"
+                  color="secondary"
+                  iconLeading={Link03}
                   onPress={handleGoogleSignIn}
-                  style={[
-                    styles.utilityBtn,
-                    { backgroundColor: colors.background, borderColor: colors.primary },
-                  ]}
                 >
-                  <Text
-                    style={[
-                      styles.utilityBtnText,
-                      { color: colors.primary, fontFamily: fSemi },
-                    ]}
-                  >
-                    🔗 Google
-                  </Text>
-                </Pressable>
+                  Google
+                </Button>
               )}
-          </View>
-        </View>
+            </div>
+          </div>
 
-        {/* Row 2: Main Navigation Tabs */}
-        {isWide ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.topTabsScroll}
+          {/* Row 2: Main Workout Navigation Tabs (Untitled UI Tabs) */}
+          <Tabs
+            selectedKey={currentTab}
+            onSelectionChange={(key) => selectMainTab(key as WorkoutTabKey)}
           >
-            {navTabs.map((t) => {
-              const active = currentTab === t.key;
-              return (
-                <Pressable
-                  key={t.key}
-                  onPress={() => selectMainTab(t.key)}
-                  style={[
-                    styles.tabBtnCompact,
-                    {
-                      backgroundColor: active ? colors.primary : colors.background,
-                      borderColor: active ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tabBtnCompactText,
-                      {
-                        color: active ? colors.primaryForeground : colors.foreground,
-                        fontFamily: fSemi,
-                      },
-                    ]}
-                  >
-                    {t.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : (
-          <View style={styles.mobileNavTabsRow}>
-            {navTabs.map((t) => {
-              const active = currentTab === t.key;
-              return (
-                <Pressable
-                  key={t.key}
-                  onPress={() => selectMainTab(t.key)}
-                  style={[
-                    styles.mobileTabBtnCompact,
-                    {
-                      backgroundColor: active ? colors.primary : colors.background,
-                      borderColor: active ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    numberOfLines={1}
-                    style={[
-                      styles.mobileTabBtnCompactText,
-                      {
-                        color: active ? colors.primaryForeground : colors.foreground,
-                        fontFamily: fSemi,
-                      },
-                    ]}
-                  >
-                    {t.mobileLabel}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
+            <TabList aria-label="בחירת תוכנית אימון" type="button-border" size="sm" fullWidth>
+              <Tab id="workoutA">{isWide ? 'אימון A: חזה, גב וזרועות' : 'אימון A'}</Tab>
+              <Tab id="workoutB">{isWide ? 'אימון B: כתפיים, גב וזרועות' : 'אימון B'}</Tab>
+              <Tab id="all">כל התרגילים</Tab>
+            </TabList>
+          </Tabs>
 
-        {/* Row 3 (Muscle filter if 'all' + Exercise Dropdown Switcher on wide screens) */}
-        {currentTab === 'all' && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.topTabsScroll}
-          >
-            {MUSCLE_FILTERS.map((mf) => {
-              const active = muscleFilter === mf;
-              const lbl = mf === 'all' ? 'כל התרגילים (10)' : mf;
-              return (
-                <Pressable
-                  key={mf}
-                  onPress={() => {
-                    setMuscleFilter(mf);
-                    setCurrentExerciseIdx(0);
-                  }}
-                  style={[
-                    styles.filterChipCompact,
-                    {
-                      backgroundColor: active ? colors.primary : colors.background,
-                      borderColor: active ? colors.primary : colors.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.smallBtnText,
-                      {
-                        color: active ? colors.primaryForeground : colors.foreground,
-                        fontFamily: fSemi,
-                      },
-                    ]}
+          {/* Row 3a: Muscle Group Filter Chips when 'all' tab is active */}
+          {currentTab === 'all' && (
+            <div className="scrollbar-hide flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              {MUSCLE_FILTERS.map((mf) => {
+                const active = muscleFilter === mf;
+                const lbl = mf === 'all' ? 'כל התרגילים (10)' : mf;
+                return (
+                  <Button
+                    key={mf}
+                    size="xs"
+                    color={active ? 'primary' : 'secondary'}
+                    onPress={() => {
+                      setMuscleFilter(mf);
+                      setCurrentExerciseIdx(0);
+                    }}
                   >
                     {lbl}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
-
-        {isWide && isWorkoutTab && visibleExercises.length > 0 && activeEx && (() => {
-          const { doneCount, effectiveSets, allDone } = getExerciseDoneStats(activeEx);
-          return (
-            <View style={styles.dropdownRowWrap}>
-              <Pressable
-                disabled={safeExIdx <= 0}
-                onPress={() => goToExercise(safeExIdx - 1, 0)}
-                style={[
-                  styles.dropdownStepArrowBtn,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                    opacity: safeExIdx <= 0 ? 0.35 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fBold }]}>
-                  →
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => setExerciseDropdownOpen(true)}
-                style={[
-                  styles.exerciseDropdownBtn,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: exerciseDropdownOpen ? colors.primary : colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.exerciseDropdownRight}>
-                  <ExerciseGifIcon
-                    exerciseId={activeEx.id}
-                    size={34}
-                    active
-                    borderColor={colors.border}
-                    activeBorderColor={colors.primary}
-                  />
-                  <View
-                    style={[
-                      styles.dropdownCountBadge,
-                      { backgroundColor: allDone ? colors.success : colors.primary },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.dropdownCountText,
-                        { color: colors.primaryForeground, fontFamily: fBold },
-                      ]}
-                    >
-                      {safeExIdx + 1}/{visibleExercises.length}
-                    </Text>
-                  </View>
-                  <Text
-                    numberOfLines={1}
-                    style={[
-                      styles.exerciseDropdownTitle,
-                      { color: colors.foreground, fontFamily: fBold },
-                    ]}
-                  >
-                    {activeEx.name}
-                  </Text>
-                </View>
-
-                <View style={styles.exerciseDropdownLeft}>
-                  <View
-                    style={[
-                      styles.dropdownSetsPill,
-                      {
-                        backgroundColor: allDone ? colors.successSoft : colors.secondary,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.dropdownSetsText,
-                        {
-                          color: allDone ? colors.success : colors.secondaryForeground,
-                          fontFamily: fSemi,
-                        },
-                      ]}
-                    >
-                      {doneCount}/{effectiveSets} {allDone ? '✓' : 'סטים'}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.dropdownChevron,
-                      { color: colors.primary, fontFamily: fBold },
-                    ]}
-                  >
-                    החלף תרגיל ▾
-                  </Text>
-                </View>
-              </Pressable>
-
-              <Pressable
-                disabled={safeExIdx >= visibleExercises.length - 1}
-                onPress={() => goToExercise(safeExIdx + 1, 0)}
-                style={[
-                  styles.dropdownStepArrowBtn,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                    opacity: safeExIdx >= visibleExercises.length - 1 ? 0.35 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fBold }]}>
-                  ←
-                </Text>
-              </Pressable>
-            </View>
-          );
-        })()}
-      </View>
-
-      {/* NON-SCROLLING FULLSCREEN WORKOUT STAGE (1 exercise & 1 set at a time, capped at page height) */}
-      {isWorkoutTab && (
-        <View
-          style={[
-            styles.fullscreenWorkoutStage,
-            !isWide && styles.fullscreenWorkoutStageMobile,
-          ]}
-        >
-          {activeEx ? (
-            (() => {
-              const ex = activeEx;
-              const idx = safeExIdx;
-              const effectiveSets = activeEffectiveSets;
-              const setNum = activeSetNum;
-              const effectiveMode = getEffectiveMode(ex);
-              const exConfigs = getConfigsForExercise(ex);
-              const { bestWeightToday } = getExerciseDoneStats(ex);
-              const entry = getSetEntry(ex, setNum);
-              const setCfg =
-                exConfigs.find((c) => c.totalWeight === entry.weight) || exConfigs[0];
-              const curCfgIdx = exConfigs.findIndex((c) => c.totalWeight === entry.weight);
-              const atMin = curCfgIdx <= 0;
-              const atMax = curCfgIdx >= exConfigs.length - 1;
-
-              const renderSingleSetWorkspace = () => (
-                <View
-                  style={[
-                    styles.singleSetWorkspace,
-                    !isWide && styles.singleSetWorkspaceMobile,
-                  ]}
-                >
-                  {/* Set Switcher Pills + Optional Barbell Toggle */}
-                  <View style={styles.setSwitcherBar}>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.setPillsRow}
-                    >
-                      {Array.from({ length: effectiveSets }, (_, i) => i + 1).map((sIdxNum) => {
-                        const sEntry = getSetEntry(ex, sIdxNum);
-                        const isActiveSet = sIdxNum === setNum;
-                        return (
-                          <Pressable
-                            key={sIdxNum}
-                            onPress={() => setCurrentSetIdx(sIdxNum - 1)}
-                            style={[
-                              styles.setSelectorPill,
-                              {
-                                backgroundColor: isActiveSet
-                                  ? colors.primary
-                                  : sEntry.done
-                                  ? colors.successSoft
-                                  : colors.background,
-                                borderColor: isActiveSet
-                                  ? colors.primary
-                                  : sEntry.done
-                                  ? colors.success
-                                  : colors.border,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.setSelectorPillText,
-                                {
-                                  color: isActiveSet
-                                    ? colors.primaryForeground
-                                    : sEntry.done
-                                    ? colors.success
-                                    : colors.foreground,
-                                  fontFamily: fBold,
-                                },
-                              ]}
-                            >
-                              {sEntry.done ? `סט ${sIdxNum} ✓` : `סט ${sIdxNum}`}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </ScrollView>
-
-                    {ex.allowBarbellToggle && (
-                      <View style={styles.modeToggleWrap}>
-                        {(
-                          [
-                            { id: 'pair', label: '2 משקולות יד' },
-                            { id: 'barbell', label: 'מוט ארוך' },
-                          ] as { id: EquipmentMode; label: string }[]
-                        ).map((opt) => {
-                          const active = effectiveMode === opt.id;
-                          return (
-                            <Pressable
-                              key={opt.id}
-                              onPress={() => setExerciseEquipmentMode(ex, opt.id)}
-                              style={[
-                                styles.modeToggleBtnCompact,
-                                {
-                                  backgroundColor: active ? colors.primary : colors.background,
-                                  borderColor: active ? colors.primary : colors.border,
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.smallBtnText,
-                                  {
-                                    color: active ? colors.primaryForeground : colors.foreground,
-                                    fontFamily: fSemi,
-                                  },
-                                ]}
-                              >
-                                {opt.label}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Active Set Controls Card (Separated Weight & Reps Sub-Cards + Quick Strip + Mark Done CTA) */}
-                  <View
-                    style={[
-                      styles.activeSetControlBox,
-                      !isWide && styles.activeSetControlBoxMobile,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: entry.done ? colors.success : colors.border,
-                      },
-                    ]}
-                  >
-                    {/* Row 1: Two Distinct Sub-Cards for Weight and Reps */}
-                    <View style={styles.controlsSplitRow}>
-                      {/* Weight Sub-Card */}
-                      <View
-                        style={[
-                          styles.metricSubCard,
-                          styles.weightMetricSubCard,
-                          {
-                            backgroundColor: colors.card,
-                            borderColor: exConfigs.length > 1 ? colors.primarySoft : colors.border,
-                          },
-                        ]}
-                      >
-                        <View style={styles.metricSubHeader}>
-                          <Text
-                            style={[
-                              styles.metricSubLabel,
-                              { color: colors.mutedForeground, fontFamily: fSemi },
-                            ]}
-                          >
-                            🏋️ משקל
-                          </Text>
-                          {effectiveSets > 1 && exConfigs.length > 1 && (
-                            <Pressable
-                              onPress={() => selectWeightForExercise(ex, entry.weight)}
-                              style={[
-                                styles.applyAllInlinePill,
-                                {
-                                  backgroundColor: colors.primarySoft,
-                                  borderColor: colors.primary,
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.applyAllInlineText,
-                                  { color: colors.primary, fontFamily: fBold },
-                                ]}
-                              >
-                                לכל הסטים ↻
-                              </Text>
-                            </Pressable>
-                          )}
-                        </View>
-
-                        <View style={styles.metricStepperRow}>
-                          <Pressable
-                            disabled={atMin}
-                            onPress={() => stepSupportedWeight(ex, setNum, -1)}
-                            style={[
-                              styles.metricStepperBtn,
-                              {
-                                backgroundColor: colors.background,
-                                borderColor: colors.border,
-                                opacity: atMin ? 0.35 : 1,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.stepperBtnText,
-                                { color: colors.foreground, fontFamily: fBold },
-                              ]}
-                            >
-                              −
-                            </Text>
-                          </Pressable>
-
-                          <View style={styles.metricValueCenter}>
-                            <Text
-                              numberOfLines={1}
-                              style={[
-                                styles.metricValueBig,
-                                { color: colors.foreground, fontFamily: fBold },
-                              ]}
-                            >
-                              {entry.weight === 0 ? 'גוף' : `${entry.weight}`}
-                            </Text>
-                            <Text
-                              numberOfLines={1}
-                              style={[
-                                styles.metricValueUnit,
-                                { color: colors.mutedForeground, fontFamily: fMed },
-                              ]}
-                            >
-                              {entry.weight === 0 ? 'ללא משקולת' : 'קילוגרם'}
-                            </Text>
-                          </View>
-
-                          <Pressable
-                            disabled={atMax}
-                            onPress={() => stepSupportedWeight(ex, setNum, 1)}
-                            style={[
-                              styles.metricStepperBtn,
-                              {
-                                backgroundColor: colors.background,
-                                borderColor: colors.border,
-                                opacity: atMax ? 0.35 : 1,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.stepperBtnText,
-                                { color: colors.foreground, fontFamily: fBold },
-                              ]}
-                            >
-                              +
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </View>
-
-                      {/* Reps Sub-Card */}
-                      <View
-                        style={[
-                          styles.metricSubCard,
-                          styles.repsMetricSubCard,
-                          { backgroundColor: colors.card, borderColor: colors.border },
-                        ]}
-                      >
-                        <View style={[styles.metricSubHeader, { justifyContent: 'center' }]}>
-                          <Text
-                            style={[
-                              styles.metricSubLabel,
-                              { color: colors.mutedForeground, fontFamily: fSemi },
-                            ]}
-                          >
-                            🔁 חזרות
-                          </Text>
-                        </View>
-
-                        <View style={styles.metricStepperRow}>
-                          <Pressable
-                            onPress={() => stepReps(ex, setNum, -1)}
-                            style={[
-                              styles.metricStepperBtn,
-                              { backgroundColor: colors.background, borderColor: colors.border },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.stepperBtnText,
-                                { color: colors.foreground, fontFamily: fBold },
-                              ]}
-                            >
-                              −
-                            </Text>
-                          </Pressable>
-
-                          <TextInput
-                            value={String(entry.reps)}
-                            onChangeText={(txt) => updateRepsText(ex, setNum, txt)}
-                            keyboardType="number-pad"
-                            style={[
-                              styles.metricRepsInput,
-                              {
-                                backgroundColor: colors.background,
-                                borderColor: colors.border,
-                                color: colors.foreground,
-                                fontFamily: fBold,
-                              },
-                            ]}
-                          />
-
-                          <Pressable
-                            onPress={() => stepReps(ex, setNum, 1)}
-                            style={[
-                              styles.metricStepperBtn,
-                              { backgroundColor: colors.background, borderColor: colors.border },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.stepperBtnText,
-                                { color: colors.foreground, fontFamily: fBold },
-                              ]}
-                            >
-                              +
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Row 2: Closest Supported Kilograms Quick Strip + More Weights Modal */}
-                    {exConfigs.length > 1 &&
-                      (() => {
-                        const anchorIdx =
-                          curCfgIdx >= 0
-                            ? curCfgIdx
-                            : Math.max(
-                                0,
-                                exConfigs.findIndex((c) => c.totalWeight >= entry.weight)
-                              );
-                        const maxQuickWeights = 4;
-                        const hasMoreWeights = exConfigs.length > maxQuickWeights;
-                        const windowStart = Math.max(
-                          0,
-                          Math.min(exConfigs.length - maxQuickWeights, anchorIdx - 1)
-                        );
-                        const visibleConfigs = hasMoreWeights
-                          ? exConfigs.slice(windowStart, windowStart + maxQuickWeights)
-                          : exConfigs;
-
-                        return (
-                          <View style={styles.quickWeightsStrip}>
-                            {visibleConfigs.map((cfg) => {
-                              const selected = cfg.totalWeight === entry.weight;
-                              return (
-                                <Pressable
-                                  key={cfg.totalWeight}
-                                  onPress={() => selectWeightForSet(ex, setNum, cfg.totalWeight)}
-                                  style={[
-                                    styles.weightOptionChipSegmented,
-                                    {
-                                      backgroundColor: selected ? colors.primary : colors.card,
-                                      borderColor: selected ? colors.primary : colors.border,
-                                    },
-                                  ]}
-                                >
-                                  <Text
-                                    numberOfLines={1}
-                                    style={[
-                                      styles.smallBtnText,
-                                      {
-                                        color: selected
-                                          ? colors.primaryForeground
-                                          : colors.foreground,
-                                        fontFamily: selected ? fBold : fMed,
-                                      },
-                                    ]}
-                                  >
-                                    {cfg.totalWeight === 0 ? '0' : `${cfg.totalWeight}`}
-                                  </Text>
-                                </Pressable>
-                              );
-                            })}
-                            {hasMoreWeights && (
-                              <Pressable
-                                onPress={() => setWeightsModalOpen(true)}
-                                style={[
-                                  styles.moreWeightsChipSegmented,
-                                  {
-                                    backgroundColor: colors.primarySoft,
-                                    borderColor: colors.primary,
-                                  },
-                                ]}
-                              >
-                                <Text
-                                  numberOfLines={1}
-                                  style={[
-                                    styles.smallBtnText,
-                                    { color: colors.primary, fontFamily: fBold },
-                                  ]}
-                                >
-                                  עוד ({exConfigs.length}) ▾
-                                </Text>
-                              </Pressable>
-                            )}
-                          </View>
-                        );
-                      })()}
-
-                    {/* Row 3: Full-Width Set Completion CTA */}
-                    <Pressable
-                      onPress={() => toggleSetDone(ex, setNum)}
-                      style={[
-                        styles.doneBtnFull,
-                        {
-                          backgroundColor: entry.done ? colors.successSoft : colors.primary,
-                          borderColor: entry.done ? colors.success : colors.primary,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.doneBtnFullText,
-                          {
-                            color: entry.done ? colors.success : colors.primaryForeground,
-                            fontFamily: fBold,
-                          },
-                        ]}
-                      >
-                        {entry.done ? `✓ סט ${setNum} בוצע (לחץ לביטול)` : `סמן סט ${setNum} כבוצע ✓`}
-                      </Text>
-                    </Pressable>
-                  </View>
-
-                  {/* Live Movement Animation + Weight Assembly Together */}
-                  {isWide ? (
-                    <EquipmentBuildDiagram
-                      compact
-                      cfg={setCfg}
-                      mode={effectiveMode}
-                      paused={animPaused}
-                      colors={colors}
-                      fontsLoaded={fontsLoaded}
-                    />
-                  ) : (
-                    <View style={[styles.dualVisualRow, styles.dualVisualRowMobile]}>
-                      <ExerciseAnimation
-                        compact
-                        micro
-                        exercise={ex}
-                        paused={animPaused}
-                        colors={colors}
-                        fontsLoaded={fontsLoaded}
-                      />
-                      <EquipmentBuildDiagram
-                        compact
-                        micro
-                        cfg={setCfg}
-                        mode={effectiveMode}
-                        paused={animPaused}
-                        colors={colors}
-                        fontsLoaded={fontsLoaded}
-                      />
-                    </View>
-                  )}
-
-                  {!isWide && (
-                    <View style={styles.infoQuickStrip}>
-                      <Pressable
-                        onPress={() => setExerciseStepsModalOpen(true)}
-                        style={[
-                          styles.stepsModalTriggerBtn,
-                          { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-                        ]}
-                      >
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.smallBtnText,
-                            { color: colors.primary, fontFamily: fBold },
-                          ]}
-                        >
-                          📋 שלבים וטיפים ({ex.steps.length})
-                        </Text>
-                      </Pressable>
-
-                      {ex.videos.map((v, vIdx) => (
-                        <Pressable
-                          key={v.url}
-                          onPress={() => Linking.openURL(v.url)}
-                          style={[
-                            styles.videoQuickChip,
-                            { backgroundColor: colors.secondary, borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.smallBtnText,
-                              { color: colors.secondaryForeground, fontFamily: fSemi },
-                            ]}
-                          >
-                            🎬 {ex.videos.length > 1 ? `סרטון ${vIdx + 1}` : 'סרטון הדגמה'} ↗
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              );
-
-              const renderExerciseGuidancePane = () => (
-                <View style={styles.guidancePane}>
-                  <View style={styles.guidanceContentCol}>
-                    <ExerciseAnimation
-                      compact
-                      exercise={ex}
-                      paused={animPaused}
-                      colors={colors}
-                      fontsLoaded={fontsLoaded}
-                    />
-                    <View style={styles.videosRow}>
-                      <Pressable
-                        onPress={() => setExerciseStepsModalOpen(true)}
-                        style={[
-                          styles.videoBtnCompact,
-                          { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-                        ]}
-                      >
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.smallBtnText, { color: colors.primary, fontFamily: fBold }]}
-                        >
-                          📋 שלבי ביצוע וטיפים ({ex.steps.length})
-                        </Text>
-                      </Pressable>
-                      {ex.videos.map((v) => (
-                        <Pressable
-                          key={v.url}
-                          onPress={() => Linking.openURL(v.url)}
-                          style={[
-                            styles.videoBtnCompact,
-                            { backgroundColor: colors.secondary, borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.smallBtnText,
-                              { color: colors.secondaryForeground, fontFamily: fSemi },
-                            ]}
-                          >
-                            🎬 {v.label} ↗
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-              );
-
-              const { doneCount: exDoneCount, allDone: exAllDone } = getExerciseDoneStats(ex);
-              const shortEquipLabel =
-                effectiveMode === 'pair'
-                  ? '2 משקולות'
-                  : effectiveMode === 'single'
-                  ? 'משקולת 1'
-                  : effectiveMode === 'barbell'
-                  ? 'מוט ארוך'
-                  : effectiveMode === 'platePair'
-                  ? '2 פלטות'
-                  : 'משקל גוף';
-              const repMatch = ex.reps.match(/\d+\s*(?:עד|-)\s*\d+/);
-              const shortRepsLabel = repMatch
-                ? `${repMatch[0].replace(/\s*עד\s*/, '–')} חזרות`
-                : `${ex.defaultReps} חזרות`;
-              const conciseMetaText = `${ex.muscle} • ${effectiveSets} סטים • ${shortRepsLabel} • ${shortEquipLabel}`;
-
-              return (
-                <View
-                  key={ex.id}
-                  style={[
-                    styles.fullscreenExCard,
-                    !isWide && styles.fullscreenExCardMobile,
-                    { backgroundColor: colors.card, borderColor: colors.border },
-                  ]}
-                >
-                  {/* Exercise Header: Wide standard OR unified mobile switcher + rest tag */}
-                  {isWide ? (
-                    <View style={[styles.exHeaderCompact, { borderBottomColor: colors.border }]}>
-                      <View style={styles.exHeaderTitleGroup}>
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Text
-                            numberOfLines={1}
-                            style={[styles.exTitleCompact, { color: colors.foreground, fontFamily: fBold }]}
-                          >
-                            {idx + 1}. {ex.name}
-                          </Text>
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.exMetaCompact,
-                              { color: colors.mutedForeground, fontFamily: fReg },
-                            ]}
-                          >
-                            {conciseMetaText}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.headerBadgesCol}>
-                        <View style={[styles.pillBadge, { backgroundColor: colors.primarySoft }]}>
-                          <Text style={[styles.pillBadgeText, { color: colors.primary, fontFamily: fBold }]}>
-                            סט {setNum} מתוך {effectiveSets}
-                          </Text>
-                        </View>
-                        <Pressable
-                          onPress={() => startTimer(ex.restSec)}
-                          style={[
-                            styles.restTagBadge,
-                            {
-                              backgroundColor: scheme === 'dark' ? '#422006' : '#fef3c7',
-                              borderColor: scheme === 'dark' ? '#f59e0b' : '#d97706',
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.restTagText,
-                              { color: scheme === 'dark' ? '#fbbf24' : '#b45309', fontFamily: fBold },
-                            ]}
-                          >
-                            ⏳ מנוחה: {ex.restSec} שניות
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ) : (
-                    <View style={[styles.exHeaderMobileWrap, { borderBottomColor: colors.border }]}>
-                      <View style={styles.mobileCardSwitcherRow}>
-                        <Pressable
-                          disabled={safeExIdx <= 0}
-                          onPress={() => goToExercise(safeExIdx - 1, 0)}
-                          style={[
-                            styles.mobileCardArrowBtn,
-                            {
-                              backgroundColor: colors.background,
-                              borderColor: colors.border,
-                              opacity: safeExIdx <= 0 ? 0.35 : 1,
-                            },
-                          ]}
-                        >
-                          <Text style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fBold }]}>
-                            →
-                          </Text>
-                        </Pressable>
-
-                        <Pressable
-                          onPress={() => setExerciseDropdownOpen(true)}
-                          style={[
-                            styles.mobileCardDropdownPill,
-                            {
-                              backgroundColor: colors.background,
-                              borderColor: exerciseDropdownOpen ? colors.primary : colors.border,
-                            },
-                          ]}
-                        >
-                          <View
-                            style={[
-                              styles.dropdownCountBadge,
-                              { backgroundColor: exAllDone ? colors.success : colors.primary },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.dropdownCountText,
-                                { color: colors.primaryForeground, fontFamily: fBold },
-                              ]}
-                            >
-                              {safeExIdx + 1}/{visibleExercises.length}
-                            </Text>
-                          </View>
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.mobileCardDropdownTitle,
-                              { color: colors.foreground, fontFamily: fBold },
-                            ]}
-                          >
-                            {ex.shortName}
-                          </Text>
-                          <Text
-                            style={[
-                              styles.mobileCardDropdownArrow,
-                              { color: colors.primary, fontFamily: fBold },
-                            ]}
-                          >
-                            {exDoneCount}/{effectiveSets} ▾
-                          </Text>
-                        </Pressable>
-
-                        <Pressable
-                          disabled={safeExIdx >= visibleExercises.length - 1}
-                          onPress={() => goToExercise(safeExIdx + 1, 0)}
-                          style={[
-                            styles.mobileCardArrowBtn,
-                            {
-                              backgroundColor: colors.background,
-                              borderColor: colors.border,
-                              opacity: safeExIdx >= visibleExercises.length - 1 ? 0.35 : 1,
-                            },
-                          ]}
-                        >
-                          <Text style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fBold }]}>
-                            ←
-                          </Text>
-                        </Pressable>
-                      </View>
-
-                      <View style={styles.mobileCardMetaRow}>
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.exMetaMobileCompact,
-                            { color: colors.mutedForeground, fontFamily: fReg },
-                          ]}
-                        >
-                          {conciseMetaText}
-                        </Text>
-
-                        <View style={styles.mobileMetaTagsGroup}>
-                          <View style={[styles.compactPillTag, { backgroundColor: colors.primarySoft }]}>
-                            <Text
-                              style={[styles.compactPillTagText, { color: colors.primary, fontFamily: fBold }]}
-                            >
-                              סט {setNum}/{effectiveSets}
-                            </Text>
-                          </View>
-                          <Pressable
-                            onPress={() => startTimer(ex.restSec)}
-                            style={[
-                              styles.restTagBadgeCompact,
-                              {
-                                backgroundColor: scheme === 'dark' ? '#422006' : '#fef3c7',
-                                borderColor: scheme === 'dark' ? '#f59e0b' : '#d97706',
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.restTagTextCompact,
-                                { color: scheme === 'dark' ? '#fbbf24' : '#b45309', fontFamily: fBold },
-                              ]}
-                            >
-                              ⏳ מנוחה: {ex.restSec} שניות
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </View>
-                    </View>
-                  )}
-
-                  {isWide ? (
-                    <>
-                      {/* Desktop Wide: Compact Last Time & Trend Card + Side-by-Side Workspace */}
-                      <ExerciseTrendCard
-                        compact
-                        exerciseId={ex.id}
-                        workoutHistory={sortedHistoryDesc}
-                        liveBestWeight={bestWeightToday}
-                        colors={colors}
-                        fontsLoaded={fontsLoaded}
-                      />
-                      <View style={styles.exBodyGridWideFull}>
-                        <View style={styles.exGuidanceColWide}>{renderExerciseGuidancePane()}</View>
-                        <View style={styles.exSetColWide}>{renderSingleSetWorkspace()}</View>
-                      </View>
-                    </>
-                  ) : (
-                    <View style={styles.flexOne}>{renderSingleSetWorkspace()}</View>
-                  )}
-                </View>
-              );
-            })()
-          ) : (
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
-                לא נמצאו תרגילים בסינון הנוכחי. בחר קבוצת שריר אחרת למעלה.
-              </Text>
-            </View>
+                  </Button>
+                );
+              })}
+            </div>
           )}
-        </View>
-      )}
 
-      {/* PROGRESS & CALCULATOR SCROLLABLE CONTAINER */}
-      {!isWorkoutTab && (
-        <ScrollView
-          ref={exerciseScrollRef}
-          style={styles.flexOne}
-          contentContainerStyle={styles.scrollContent}
-        >
-          <View style={styles.maxWidthWrap}>
-            {/* PROGRESS & ANALYTICS SECTION */}
-            {currentTab === 'progress' && (
-              <View style={{ gap: 16 }}>
-                <View style={[styles.statsGrid, isWide && styles.statsGridWide]}>
-                  <View
-                    style={[
-                      styles.card,
-                      styles.statCard,
-                      { backgroundColor: colors.card, borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.subCardText,
-                        { color: colors.mutedForeground, fontFamily: fReg },
-                      ]}
-                    >
-                      אימונים ששמרת ביומן
-                    </Text>
-                    <Text style={[styles.statBigNum, { color: colors.foreground, fontFamily: fBold }]}>
-                      {progressStats.totalWorkouts}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.card,
-                      styles.statCard,
-                      { backgroundColor: colors.card, borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.subCardText,
-                        { color: colors.mutedForeground, fontFamily: fReg },
-                      ]}
-                    >
-                      אימונים ב-7 הימים האחרונים
-                    </Text>
-                    <Text style={[styles.statBigNum, { color: colors.primary, fontFamily: fBold }]}>
-                      {progressStats.weekWorkouts}
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.card,
-                      styles.statCard,
-                      { backgroundColor: colors.card, borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.subCardText,
-                        { color: colors.mutedForeground, fontFamily: fReg },
-                      ]}
-                    >
-                      סך הכל סטים שביצעת
-                    </Text>
-                    <Text style={[styles.statBigNum, { color: colors.foreground, fontFamily: fBold }]}>
-                      {progressStats.totalSets}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Chart Card */}
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                    📊 גרף התקדמות במשקלים לפי תרגיל
-                  </Text>
-                  <Text
-                    style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
-                  >
-                    בחרו תרגיל כדי לצפות בעליית המשקל מאימון לאימון:
-                  </Text>
-
-                  <View style={styles.gifPickerGrid}>
-                    {EXERCISES.map((ex, i) => {
-                      const active = chartExerciseId === ex.id;
-                      return (
-                        <Pressable
-                          key={ex.id}
-                          onPress={() => setChartExerciseId(ex.id)}
-                          style={[
-                            styles.gifExerciseTile,
-                            {
-                              backgroundColor: active ? colors.primarySoft : colors.background,
-                              borderColor: active ? colors.primary : colors.border,
-                            },
-                          ]}
-                        >
-                          <ExerciseGifIcon
-                            exerciseId={ex.id}
-                            size={60}
-                            active={active}
-                            borderColor={colors.border}
-                            activeBorderColor={colors.primary}
-                          />
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.gifTileLabel,
-                              {
-                                color: active ? colors.primary : colors.foreground,
-                                fontFamily: active ? fBold : fSemi,
-                              },
-                            ]}
-                          >
-                            {i + 1}. {ex.shortName}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-
-                  {(() => {
-                    const selectedEx = EXERCISES.find((e) => e.id === chartExerciseId);
-                    if (!selectedEx) return null;
-                    return (
-                      <View
-                        style={[
-                          styles.chartSelectedBanner,
-                          { backgroundColor: colors.background, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.subCardText, { color: colors.foreground, fontFamily: fBold }]}
-                        >
-                          {selectedEx.name}{' '}
-                          <Text style={{ color: colors.mutedForeground, fontFamily: fReg }}>
-                            ({selectedEx.muscle})
-                          </Text>
-                        </Text>
-                      </View>
-                    );
-                  })()}
-
-                  <ProgressChart
-                    exerciseId={chartExerciseId}
-                    workoutHistory={sortedHistoryDesc}
-                    colors={colors}
-                    fontsLoaded={fontsLoaded}
+          {/* Row 3b: Wide Desktop Exercise Switcher Bar */}
+          {isWide &&
+            isWorkoutTab &&
+            visibleExercises.length > 0 &&
+            activeEx &&
+            (() => {
+              const { doneCount, effectiveSets, allDone } = getExerciseDoneStats(activeEx);
+              return (
+                <div className="flex items-center gap-2">
+                  <ButtonUtility
+                    size="sm"
+                    color="secondary"
+                    icon={ArrowRight}
+                    tooltip="תרגיל קודם"
+                    isDisabled={safeExIdx <= 0}
+                    onPress={() => goToExercise(safeExIdx - 1, 0)}
                   />
-                </View>
 
-                {/* Workout Log + Backup */}
-                <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <View
-                    style={[
-                      styles.rowBetween,
-                      {
-                        borderBottomWidth: 1,
-                        borderBottomColor: colors.border,
-                        paddingBottom: 12,
-                      },
-                    ]}
+                  <button
+                    type="button"
+                    onClick={() => setExerciseDropdownOpen(true)}
+                    className={`flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-3 rounded-lg bg-primary px-3 py-1.5 shadow-xs ring-1 transition duration-100 hover:bg-primary_hover ${
+                      exerciseDropdownOpen ? 'ring-2 ring-brand' : 'ring-primary'
+                    }`}
                   >
-                    <View style={{ flex: 1, gap: 3 }}>
-                      <Text
-                        style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}
-                      >
-                        🗓️ יומן האימונים שלך
-                      </Text>
-                      <Text
-                        style={[
-                          styles.subCardText,
-                          { color: colors.mutedForeground, fontFamily: fReg },
-                        ]}
-                      >
-                        {syncStatus.message}
-                      </Text>
-                    </View>
-                    <View style={styles.setupActionsRow}>
-                      <Pressable
-                        onPress={handleExportBackup}
-                        style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
-                      >
-                        <Text
-                          style={[
-                            styles.smallBtnText,
-                            { color: colors.secondaryForeground, fontFamily: fSemi },
-                          ]}
-                        >
-                          ⬇️ גיבוי נתונים
-                        </Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => setImportModalOpen((o) => !o)}
-                        style={[
-                          styles.outlineBtn,
-                          { backgroundColor: colors.background, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fSemi }]}
-                        >
-                          ⬆️ שחזור מגיבוי
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-
-                  {importModalOpen && (
-                    <View
-                      style={[
-                        styles.subCard,
-                        { backgroundColor: colors.background, borderColor: colors.border, gap: 8 },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                      >
-                        הדבק תוכן קובץ גיבוי (JSON):
-                      </Text>
-                      <TextInput
-                        value={importJsonText}
-                        onChangeText={setImportJsonText}
-                        multiline
-                        numberOfLines={4}
-                        placeholder='{"workoutHistory": [...]}'
-                        placeholderTextColor={colors.mutedForeground}
-                        style={[
-                          styles.noteInput,
-                          {
-                            minHeight: 90,
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                            color: colors.foreground,
-                            fontFamily: fReg,
-                          },
-                        ]}
-                      />
-                      <View style={styles.setupActionsRow}>
-                        <Pressable
-                          onPress={handleApplyImportJson}
-                          style={[styles.primarySmallBtn, { backgroundColor: colors.primary }]}
-                        >
-                          <Text
-                            style={[
-                              styles.smallBtnText,
-                              { color: colors.primaryForeground, fontFamily: fBold },
-                            ]}
-                          >
-                            טען גיבוי
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  )}
-
-                  {sortedHistoryDesc.length === 0 ? (
-                    <View
-                      style={[
-                        styles.subCard,
-                        {
-                          backgroundColor: colors.background,
-                          borderColor: colors.border,
-                          padding: 24,
-                          alignItems: 'center',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                      >
-                        עדיין לא שמרת אימונים ביומן
-                      </Text>
-                      <Text
-                        style={[
-                          styles.subCardText,
-                          { color: colors.mutedForeground, fontFamily: fReg, textAlign: 'center' },
-                        ]}
-                      >
-                        בחר אימון בלשוניות למעלה, סמן את הסטים שביצעת עם המשקל ומספר החזרות, ולחץ בתחתית העמוד על "שמור אימון ביומן".
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={{ gap: 12 }}>
-                      {sortedHistoryDesc.map((sess) => (
-                        <View
-                          key={sess.id}
-                          style={[
-                            styles.subCard,
-                            {
-                              backgroundColor: colors.background,
-                              borderColor: colors.border,
-                              gap: 10,
-                            },
-                          ]}
-                        >
-                          <View
-                            style={[
-                              styles.rowBetween,
-                              {
-                                borderBottomWidth: 1,
-                                borderBottomColor: colors.border,
-                                paddingBottom: 8,
-                              },
-                            ]}
-                          >
-                            <View style={{ gap: 2 }}>
-                              <Text
-                                style={[
-                                  styles.subCardTitle,
-                                  { color: colors.foreground, fontFamily: fBold },
-                                ]}
-                              >
-                                {sess.workoutTitle}
-                              </Text>
-                              <Text
-                                style={[
-                                  styles.subCardText,
-                                  { color: colors.mutedForeground, fontFamily: fReg },
-                                ]}
-                              >
-                                📅 {sess.displayDate}
-                              </Text>
-                            </View>
-                            <Pressable
-                              onPress={() => handleDeleteSession(sess.id)}
-                              style={[
-                                styles.outlineBtn,
-                                { backgroundColor: colors.card, borderColor: colors.border },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.smallBtnText,
-                                  { color: colors.danger, fontFamily: fSemi },
-                                ]}
-                              >
-                                מחק רישום
-                              </Text>
-                            </Pressable>
-                          </View>
-
-                          {Boolean(sess.note) && (
-                            <View
-                              style={[
-                                styles.subCard,
-                                {
-                                  backgroundColor: colors.card,
-                                  borderColor: colors.border,
-                                  padding: 10,
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.subCardText,
-                                  { color: colors.foreground, fontFamily: fReg },
-                                ]}
-                              >
-                                📝 <Text style={{ fontFamily: fBold }}>הערה:</Text> {sess.note}
-                              </Text>
-                            </View>
-                          )}
-
-                          <View style={{ gap: 8 }}>
-                            {(sess.items || []).map((item, idx2) => {
-                              const exMeta = EXERCISES.find((e) => e.id === item.exId);
-                              return (
-                                <View
-                                  key={`${item.exId}-${idx2}`}
-                                  style={[
-                                    styles.subCard,
-                                    {
-                                      backgroundColor: colors.card,
-                                      borderColor: colors.border,
-                                      padding: 10,
-                                    },
-                                  ]}
-                                >
-                                  <View style={styles.historyItemHeader}>
-                                    <ExerciseGifIcon
-                                      exerciseId={item.exId}
-                                      size={42}
-                                      borderColor={colors.border}
-                                    />
-                                    <View style={{ flex: 1, gap: 4 }}>
-                                      <Text
-                                        numberOfLines={1}
-                                        style={[
-                                          styles.subCardText,
-                                          { color: colors.foreground, fontFamily: fBold },
-                                        ]}
-                                      >
-                                        {exMeta ? exMeta.shortName : item.exName}
-                                      </Text>
-                                      <View style={styles.filterRow}>
-                                        {(item.sets || []).map((st) => (
-                                          <View
-                                            key={st.setNum}
-                                            style={[
-                                              styles.pillBadge,
-                                              { backgroundColor: colors.secondary },
-                                            ]}
-                                          >
-                                            <Text
-                                              style={[
-                                                styles.pillBadgeText,
-                                                { color: colors.secondaryForeground, fontFamily: fMed },
-                                              ]}
-                                            >
-                                              סט {st.setNum}: {st.weight} קילוגרם × {st.reps} חזרות
-                                            </Text>
-                                          </View>
-                                        ))}
-                                      </View>
-                                    </View>
-                                  </View>
-                                </View>
-                              );
-                            })}
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              </View>
-            )}
-          </View>
-        </ScrollView>
-      )}
-
-      {/* ALWAYS-VISIBLE PERSISTENT BOTTOM DOCK: SET/EX NAV + REST WATCH + LIVE STATS */}
-      <View
-        style={[
-          styles.bottomDock,
-          !isWide && styles.bottomDockMobile,
-          { backgroundColor: colors.card, borderTopColor: colors.border },
-        ]}
-      >
-        {isWorkoutTab && activeEx && (
-          <View
-            style={[
-              styles.bottomNavRow,
-              !isWide && styles.bottomNavRowMobile,
-              { borderBottomColor: colors.border },
-            ]}
-          >
-            {/* In RTL row-reverse: first child renders on Right (Previous), middle Save, last on Left (Next / Finish) */}
-            <Pressable
-              disabled={isAtVeryStart}
-              onPress={goPrevStep}
-              style={[
-                styles.bottomNavBtn,
-                !isWide && styles.bottomNavBtnMobile,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                  opacity: isAtVeryStart ? 0.35 : 1,
-                },
-              ]}
-            >
-              <Text style={[styles.bottomNavBtnText, { color: colors.foreground, fontFamily: fSemi }]}>
-                {prevBtnLabel}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                setSaveFeedback(null);
-                setSaveModalOpen(true);
-              }}
-              style={[
-                styles.bottomSaveBtn,
-                !isWide && styles.bottomNavBtnMobile,
-                {
-                  backgroundColor:
-                    totalDoneInView > 0 ? colors.primarySoft : colors.background,
-                  borderColor: totalDoneInView > 0 ? colors.primary : colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.bottomNavBtnText,
-                  {
-                    color: totalDoneInView > 0 ? colors.primary : colors.foreground,
-                    fontFamily: fBold,
-                  },
-                ]}
-              >
-                💾 שמור ({totalDoneInView}/{totalSetsInView})
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={goNextStep}
-              style={[
-                styles.bottomNavBtn,
-                !isWide && styles.bottomNavBtnMobile,
-                {
-                  backgroundColor: isAtVeryEnd ? colors.success : colors.primary,
-                  borderColor: isAtVeryEnd ? colors.success : colors.primary,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.bottomNavBtnText,
-                  { color: '#ffffff', fontFamily: fBold },
-                ]}
-              >
-                {nextBtnLabel}
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* Persistent Rest Watch + Live Workout Stats (Visible across the entire app) */}
-        <View style={[styles.watchStatsBar, !isWide && styles.watchStatsBarMobile]}>
-          <View
-            style={[
-              styles.watchCluster,
-              !isWide && styles.watchClusterMobile,
-              {
-                backgroundColor: timerFinished ? colors.successSoft : colors.background,
-                borderColor: timerFinished ? colors.success : colors.border,
-              },
-            ]}
-          >
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.compactTimerVal,
-                !isWide && styles.compactTimerValMobile,
-                {
-                  color: timerFinished ? colors.success : colors.foreground,
-                  fontFamily: fBold,
-                },
-              ]}
-            >
-              {timerFinished ? '✓ המשך! 💪' : `⏱ ${formatTime(timerSeconds)}`}
-            </Text>
-            <Pressable
-              onPress={toggleTimer}
-              style={[
-                styles.miniTimerBtn,
-                !isWide && styles.miniTimerBtnMobile,
-                { backgroundColor: timerRunning ? colors.danger : colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.miniTimerBtnText,
-                  { color: colors.primaryForeground, fontFamily: fBold },
-                ]}
-              >
-                {timerRunning ? 'עצור' : 'הפעל'}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => startTimer(60)}
-              style={[
-                styles.miniTimerBtn,
-                !isWide && styles.miniTimerBtnMobile,
-                { backgroundColor: colors.secondary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.miniTimerBtnText,
-                  { color: colors.secondaryForeground, fontFamily: fMed },
-                ]}
-              >
-                60 שניות
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => startTimer(90)}
-              style={[
-                styles.miniTimerBtn,
-                !isWide && styles.miniTimerBtnMobile,
-                { backgroundColor: colors.secondary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.miniTimerBtnText,
-                  { color: colors.secondaryForeground, fontFamily: fMed },
-                ]}
-              >
-                90 שניות
-              </Text>
-            </Pressable>
-          </View>
-
-          <Pressable
-            onPress={() => {
-              if (currentTab !== 'progress') selectMainTab('progress');
-            }}
-            style={[styles.statsCluster, !isWide && styles.statsClusterMobile]}
-          >
-            {isWide ? (
-              <>
-                {totalSetsInView > 0 && (
-                  <View
-                    style={[
-                      styles.bottomStatPill,
-                      { backgroundColor: colors.background, borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.bottomStatText,
-                        { color: colors.foreground, fontFamily: fSemi },
-                      ]}
-                    >
-                      סטים: {totalDoneInView}/{totalSetsInView}
-                    </Text>
-                  </View>
-                )}
-                <View
-                  style={[
-                    styles.bottomStatPill,
-                    { backgroundColor: colors.secondary, borderColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.bottomStatText,
-                      { color: colors.secondaryForeground, fontFamily: fSemi },
-                    ]}
-                  >
-                    🔥 {progressStats.weekWorkouts} השבוע • {progressStats.totalWorkouts} אימונים
-                  </Text>
-                </View>
-              </>
-            ) : (
-              <View
-                style={[
-                  styles.bottomStatPill,
-                  styles.bottomStatPillMobile,
-                  { backgroundColor: colors.secondary, borderColor: colors.border },
-                ]}
-              >
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.bottomStatText,
-                    { color: colors.secondaryForeground, fontFamily: fSemi },
-                  ]}
-                >
-                  {totalSetsInView > 0
-                    ? `✓ ${totalDoneInView}/${totalSetsInView} • 🔥 ${progressStats.totalWorkouts}`
-                    : `🔥 ${progressStats.totalWorkouts} אימונים`}
-                </Text>
-              </View>
-            )}
-          </Pressable>
-        </View>
-      </View>
-
-      {/* EXERCISE SWITCHER DROPDOWN MODAL */}
-      <Modal
-        visible={exerciseDropdownOpen}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setExerciseDropdownOpen(false)}
-      >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setExerciseDropdownOpen(false)}
-        >
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={[
-              styles.modalCard,
-              styles.dropdownListModal,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <View
-              style={[
-                styles.rowBetween,
-                { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 },
-              ]}
-            >
-              <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                🏋️ בחר תרגיל ({visibleExercises.length} תרגילים)
-              </Text>
-              <Pressable
-                onPress={() => setExerciseDropdownOpen(false)}
-                style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
-              >
-                <Text
-                  style={[
-                    styles.smallBtnText,
-                    { color: colors.secondaryForeground, fontFamily: fBold },
-                  ]}
-                >
-                  סגור ✕
-                </Text>
-              </Pressable>
-            </View>
-
-            <ScrollView contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-              {visibleExercises.map((itemEx, idx) => {
-                const isCur = idx === safeExIdx;
-                const { doneCount, effectiveSets, allDone, bestWeightToday } =
-                  getExerciseDoneStats(itemEx);
-                const lastLog = getLastExerciseLog(itemEx.id);
-                const lastSummary =
-                  lastLog && lastLog.sets.length > 0
-                    ? `פעם קודמת: ${lastLog.sets[0].weight} קילוגרם`
-                    : `היום: ${bestWeightToday} קילוגרם`;
-                return (
-                  <Pressable
-                    key={itemEx.id}
-                    onPress={() => {
-                      goToExercise(idx, 0);
-                      setExerciseDropdownOpen(false);
-                    }}
-                    style={[
-                      styles.dropdownListRow,
-                      {
-                        backgroundColor: isCur
-                          ? colors.primarySoft
-                          : allDone
-                          ? colors.successSoft
-                          : colors.background,
-                        borderColor: isCur
-                          ? colors.primary
-                          : allDone
-                          ? colors.success
-                          : colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={styles.exerciseDropdownRight}>
+                    <div className="flex min-w-0 items-center gap-2.5">
                       <ExerciseGifIcon
-                        exerciseId={itemEx.id}
-                        size={52}
-                        active={isCur}
+                        exerciseId={activeEx.id}
+                        size={32}
+                        active
                         borderColor={colors.border}
                         activeBorderColor={colors.primary}
                       />
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.subCardTitle,
-                            { color: colors.foreground, fontFamily: fBold },
-                          ]}
-                        >
-                          {idx + 1}. {itemEx.shortName}
-                        </Text>
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.subCardText,
-                            { color: colors.mutedForeground, fontFamily: fReg },
-                          ]}
-                        >
-                          {itemEx.muscle} • {effectiveSets} סטים • {lastSummary}
-                        </Text>
-                      </View>
-                    </View>
+                      <Badge size="sm" color={allDone ? 'success' : 'brand'}>
+                        {safeExIdx + 1}/{visibleExercises.length}
+                      </Badge>
+                      <span className="truncate text-sm font-bold text-primary">
+                        {activeEx.name}
+                      </span>
+                    </div>
 
-                    <View
-                      style={[
-                        styles.dropdownSetsPill,
-                        {
-                          backgroundColor: isCur
-                            ? colors.primary
-                            : allDone
-                            ? colors.success
-                            : colors.card,
-                          borderWidth: 1,
-                          borderColor: isCur
-                            ? colors.primary
-                            : allDone
-                            ? colors.success
-                            : colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.dropdownSetsText,
-                          {
-                            color:
-                              isCur || allDone ? colors.primaryForeground : colors.foreground,
-                            fontFamily: fBold,
-                          },
-                        ]}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge
+                        size="sm"
+                        color={allDone ? 'success' : 'gray'}
+                        type={allDone ? 'pill-color' : 'modern'}
                       >
-                        {allDone ? 'הושלם ✓' : `${doneCount}/${effectiveSets}`}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
+                        {doneCount}/{effectiveSets} {allDone ? 'הושלם' : 'סטים'}
+                      </Badge>
+                      <span className="flex items-center gap-1 text-xs font-semibold text-brand-secondary">
+                        <span>החלף תרגיל</span>
+                        <ChevronDown className="size-4" />
+                      </span>
+                    </div>
+                  </button>
 
-      {/* ALL SUPPORTED WEIGHTS MODAL (Opened from "עוד" button inside active set) */}
-      <Modal
-        visible={weightsModalOpen && !!activeEx}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setWeightsModalOpen(false)}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={() => setWeightsModalOpen(false)}>
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={[
-              styles.modalCard,
-              styles.dropdownListModal,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
+                  <ButtonUtility
+                    size="sm"
+                    color="secondary"
+                    icon={ArrowLeft}
+                    tooltip="תרגיל הבא"
+                    isDisabled={safeExIdx >= visibleExercises.length - 1}
+                    onPress={() => goToExercise(safeExIdx + 1, 0)}
+                  />
+                </div>
+              );
+            })()}
+        </div>
+      </header>
+
+      {/* MAIN WORKOUT STAGE */}
+      {isWorkoutTab && (
+        <main
+          className={`flex min-h-0 flex-1 flex-col ${
+            isWide ? 'overflow-hidden px-4 py-3' : 'overflow-y-auto px-2.5 pt-2 pb-4'
+          }`}
+        >
+          <div
+            className={`mx-auto flex w-full max-w-5xl flex-col ${
+              isWide ? 'min-h-0 flex-1' : ''
+            }`}
           >
-            {activeEx &&
+            {activeEx ? (
               (() => {
-                const modalConfigs = getConfigsForExercise(activeEx);
-                const modalMode = getEffectiveMode(activeEx);
-                const modalEntry = getSetEntry(activeEx, activeSetNum);
-                const modalTrend = getExerciseTrendSummary(
-                  activeEx.id,
-                  sortedHistoryDesc,
-                  colors
+                const ex = activeEx;
+                const idx = safeExIdx;
+                const effectiveSets = activeEffectiveSets;
+                const setNum = activeSetNum;
+                const effectiveMode = getEffectiveMode(ex);
+                const exConfigs = getConfigsForExercise(ex);
+                const { doneCount: exDoneCount, allDone: exAllDone, bestWeightToday } =
+                  getExerciseDoneStats(ex);
+                const entry = getSetEntry(ex, setNum);
+                const setCfg =
+                  exConfigs.find((c) => c.totalWeight === entry.weight) || exConfigs[0];
+                const curCfgIdx = exConfigs.findIndex((c) => c.totalWeight === entry.weight);
+                const atMin = curCfgIdx <= 0;
+                const atMax = curCfgIdx >= exConfigs.length - 1;
+
+                const shortEquipLabel =
+                  effectiveMode === 'pair'
+                    ? '2 משקולות'
+                    : effectiveMode === 'single'
+                    ? 'משקולת 1'
+                    : effectiveMode === 'barbell'
+                    ? 'מוט ארוך'
+                    : effectiveMode === 'platePair'
+                    ? '2 פלטות'
+                    : 'משקל גוף';
+                const repMatch = ex.reps.match(/\d+\s*(?:עד|-)\s*\d+/);
+                const shortRepsLabel = repMatch
+                  ? `${repMatch[0].replace(/\s*עד\s*/, '–')} חזרות`
+                  : `${ex.defaultReps} חזרות`;
+                const conciseMetaText = `${ex.muscle} • ${effectiveSets} סטים • ${shortRepsLabel} • ${shortEquipLabel}`;
+
+                const anchorIdx =
+                  curCfgIdx >= 0
+                    ? curCfgIdx
+                    : Math.max(0, exConfigs.findIndex((c) => c.totalWeight >= entry.weight));
+                const maxQuickWeights = 4;
+                const hasMoreWeights = exConfigs.length > maxQuickWeights;
+                const windowStart = Math.max(
+                  0,
+                  Math.min(exConfigs.length - maxQuickWeights, anchorIdx - 1)
                 );
-                const prevBest = modalTrend.last ? modalTrend.last.bestWeight : null;
+                const visibleConfigs = hasMoreWeights
+                  ? exConfigs.slice(windowStart, windowStart + maxQuickWeights)
+                  : exConfigs;
+
+                const renderSingleSetWorkspace = () => (
+                  <div className="flex flex-col gap-2">
+                    {/* Set Selector Pills + Equipment Toggle */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="scrollbar-hide flex items-center gap-1.5 overflow-x-auto py-0.5">
+                        {Array.from({ length: effectiveSets }, (_, i) => i + 1).map((sIdxNum) => {
+                          const sEntry = getSetEntry(ex, sIdxNum);
+                          const isActiveSet = sIdxNum === setNum;
+                          return (
+                            <Button
+                              key={sIdxNum}
+                              size="xs"
+                              color={isActiveSet ? 'primary' : 'secondary'}
+                              iconLeading={sEntry.done ? Check : undefined}
+                              onPress={() => setCurrentSetIdx(sIdxNum - 1)}
+                              className={
+                                !isActiveSet && sEntry.done
+                                  ? 'bg-success-primary text-success-primary ring-utility-green-300'
+                                  : undefined
+                              }
+                            >
+                              סט {sIdxNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+
+                      {ex.allowBarbellToggle && (
+                        <ButtonGroup
+                          size="sm"
+                          selectedKeys={[effectiveMode]}
+                          onSelectionChange={(keys) => {
+                            const next = Array.from(keys)[0] as EquipmentMode | undefined;
+                            if (next) setExerciseEquipmentMode(ex, next);
+                          }}
+                        >
+                          <ButtonGroupItem
+                            id="pair"
+                            className="px-2.5 py-1.5 text-xs selected:bg-brand-solid selected:text-white"
+                          >
+                            2 משקולות יד
+                          </ButtonGroupItem>
+                          <ButtonGroupItem
+                            id="barbell"
+                            className="px-2.5 py-1.5 text-xs selected:bg-brand-solid selected:text-white"
+                          >
+                            מוט ארוך
+                          </ButtonGroupItem>
+                        </ButtonGroup>
+                      )}
+                    </div>
+
+                    {/* Weight + Reps Controls Panel */}
+                    <div
+                      className={`flex flex-col gap-2 rounded-xl bg-secondary_alt p-2.5 ring-1 ${
+                        entry.done ? 'ring-utility-green-300' : 'ring-secondary'
+                      }`}
+                    >
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Weight Sub-Card */}
+                        <div
+                          className={`flex flex-col justify-between gap-1.5 rounded-xl bg-primary p-2.5 shadow-xs ring-1 ${
+                            exConfigs.length > 1 ? 'ring-utility-brand-200' : 'ring-secondary'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="flex items-center gap-1 text-xs font-semibold text-tertiary">
+                              <Scales02 className="size-3.5 text-fg-quaternary" />
+                              <span>משקל</span>
+                            </span>
+                            {effectiveSets > 1 && exConfigs.length > 1 && (
+                              <Button
+                                size="xs"
+                                color="link-color"
+                                iconLeading={RefreshCw01}
+                                onPress={() => selectWeightForExercise(ex, entry.weight)}
+                                className="text-[11px]"
+                              >
+                                לכל הסטים
+                              </Button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1">
+                            <ButtonUtility
+                              size="sm"
+                              color="secondary"
+                              icon={Minus}
+                              tooltip="הפחת משקל"
+                              isDisabled={atMin}
+                              onPress={() => stepSupportedWeight(ex, setNum, -1)}
+                              className="size-8 rounded-lg sm:size-9"
+                            />
+
+                            <div className="flex min-w-0 flex-1 flex-col items-center justify-center">
+                              <span className="truncate text-lg font-bold leading-none text-primary sm:text-xl">
+                                {entry.weight === 0 ? 'גוף' : `${entry.weight}`}
+                              </span>
+                              <span className="text-[10px] font-medium text-tertiary sm:text-[11px]">
+                                {entry.weight === 0 ? 'ללא משקולת' : 'קילוגרם'}
+                              </span>
+                            </div>
+
+                            <ButtonUtility
+                              size="sm"
+                              color="secondary"
+                              icon={Plus}
+                              tooltip="הוסף משקל"
+                              isDisabled={atMax}
+                              onPress={() => stepSupportedWeight(ex, setNum, 1)}
+                              className="size-8 rounded-lg sm:size-9"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Reps Sub-Card */}
+                        <div className="flex flex-col justify-between gap-1.5 rounded-xl bg-primary p-2 shadow-xs ring-1 ring-secondary sm:p-2.5">
+                          <div className="flex items-center justify-center gap-1">
+                            <Repeat02 className="size-3.5 text-fg-quaternary" />
+                            <span className="text-xs font-semibold text-tertiary">חזרות</span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-1">
+                            <ButtonUtility
+                              size="sm"
+                              color="secondary"
+                              icon={Minus}
+                              tooltip="פחות חזרה"
+                              onPress={() => stepReps(ex, setNum, -1)}
+                              className="size-8 rounded-lg sm:size-9"
+                            />
+
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              aria-label="מספר חזרות"
+                              value={entry.reps}
+                              onChange={(e) => updateRepsText(ex, setNum, e.target.value)}
+                              className="h-8 min-w-0 flex-1 rounded-lg bg-secondary_alt text-center text-md font-bold text-primary ring-1 ring-primary ring-inset focus:ring-2 focus:ring-brand focus:outline-hidden sm:h-9 sm:text-lg"
+                            />
+
+                            <ButtonUtility
+                              size="sm"
+                              color="secondary"
+                              icon={Plus}
+                              tooltip="עוד חזרה"
+                              onPress={() => stepReps(ex, setNum, 1)}
+                              className="size-8 rounded-lg sm:size-9"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick Weight Strip */}
+                      {exConfigs.length > 1 && (
+                        <div className="flex items-center gap-1.5">
+                          {visibleConfigs.map((cfg) => {
+                            const selected = cfg.totalWeight === entry.weight;
+                            return (
+                              <Button
+                                key={cfg.totalWeight}
+                                size="xs"
+                                color={selected ? 'primary' : 'secondary'}
+                                onPress={() => selectWeightForSet(ex, setNum, cfg.totalWeight)}
+                                className="min-w-0 flex-1 px-1.5"
+                              >
+                                {cfg.totalWeight === 0 ? '0' : `${cfg.totalWeight}`}
+                              </Button>
+                            );
+                          })}
+                          {hasMoreWeights && (
+                            <Button
+                              size="xs"
+                              color="secondary"
+                              iconTrailing={ChevronDown}
+                              onPress={() => setWeightsModalOpen(true)}
+                              className="shrink-0 bg-brand-primary_alt text-brand-secondary ring-utility-brand-300"
+                            >
+                              עוד ({exConfigs.length})
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Set Completion CTA */}
+                      <Button
+                        size="md"
+                        color={entry.done ? 'secondary' : 'primary'}
+                        iconLeading={entry.done ? CheckCircle : Check}
+                        onPress={() => toggleSetDone(ex, setNum)}
+                        className={`w-full ${
+                          entry.done
+                            ? 'bg-success-primary text-success-primary ring-utility-green-300 hover:bg-success-primary'
+                            : ''
+                        }`}
+                      >
+                        {entry.done ? `סט ${setNum} בוצע (לחץ לביטול)` : `סמן סט ${setNum} כבוצע`}
+                      </Button>
+                    </div>
+
+                    {/* Visual Equipment & Animation Section */}
+                    {isWide ? (
+                      <div className="flex flex-1 items-center justify-center rounded-xl bg-secondary_alt p-1.5 ring-1 ring-secondary">
+                        <EquipmentBuildDiagram
+                          compact
+                          cfg={setCfg}
+                          mode={effectiveMode}
+                          paused={animPaused}
+                          colors={colors}
+                          fontsLoaded={fontsLoaded}
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center justify-center overflow-hidden rounded-xl bg-secondary_alt p-1 ring-1 ring-secondary">
+                          <ExerciseAnimation
+                            compact
+                            micro
+                            exercise={ex}
+                            paused={animPaused}
+                            colors={colors}
+                            fontsLoaded={fontsLoaded}
+                          />
+                        </div>
+                        <div className="flex items-center justify-center overflow-hidden rounded-xl bg-secondary_alt p-1 ring-1 ring-secondary">
+                          <EquipmentBuildDiagram
+                            compact
+                            micro
+                            cfg={setCfg}
+                            mode={effectiveMode}
+                            paused={animPaused}
+                            colors={colors}
+                            fontsLoaded={fontsLoaded}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mobile Steps & Video Triggers */}
+                    {!isWide && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                          size="xs"
+                          color="secondary"
+                          iconLeading={List}
+                          onPress={() => setExerciseStepsModalOpen(true)}
+                          className="flex-1 bg-brand-primary_alt text-brand-secondary ring-utility-brand-300"
+                        >
+                          שלבים וטיפים ({ex.steps.length})
+                        </Button>
+                        {ex.videos.map((v, vIdx) => (
+                          <Button
+                            key={v.url}
+                            href={v.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            size="xs"
+                            color="secondary"
+                            iconLeading={PlayCircle}
+                            iconTrailing={ArrowUpRight}
+                          >
+                            {ex.videos.length > 1 ? `סרטון ${vIdx + 1}` : 'סרטון הדגמה'}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
 
                 return (
-                  <>
-                    <View
-                      style={[
-                        styles.rowBetween,
-                        { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 },
-                      ]}
-                    >
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                        >
-                          ⚖️ כל המשקלים הנתמכים ({modalConfigs.length})
-                        </Text>
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.exMetaCompact,
-                            { color: colors.mutedForeground, fontFamily: fReg },
-                          ]}
-                        >
-                          {activeEx.name} • סט {activeSetNum}
-                          {prevBest !== null ? ` • אימון קודם: ${prevBest} קילוגרם` : ''}
-                        </Text>
-                      </View>
-                      <Pressable
-                        onPress={() => setWeightsModalOpen(false)}
-                        style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
-                      >
-                        <Text
-                          style={[
-                            styles.smallBtnText,
-                            { color: colors.secondaryForeground, fontFamily: fBold },
-                          ]}
-                        >
-                          סגור ✕
-                        </Text>
-                      </Pressable>
-                    </View>
+                  <div
+                    key={ex.id}
+                    className={`flex flex-col gap-2.5 rounded-2xl bg-primary shadow-xs ring-1 ring-secondary ${
+                      isWide ? 'min-h-0 flex-1 overflow-hidden p-3.5' : 'p-3'
+                    }`}
+                  >
+                    {/* Card Header (Clean - NO ExerciseGifIcon inside card) */}
+                    {isWide ? (
+                      <div className="flex items-center justify-between gap-3 border-b border-secondary pb-2.5">
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <h1 className="truncate text-lg font-bold text-primary">
+                            {idx + 1}. {ex.name}
+                          </h1>
+                          <p className="truncate text-xs text-tertiary">{conciseMetaText}</p>
+                        </div>
 
-                    <ScrollView contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
-                      {modalConfigs.map((cfg) => {
-                        const isCur = cfg.totalWeight === modalEntry.weight;
-                        const isPrev = prevBest !== null && cfg.totalWeight === prevBest;
-                        return (
-                          <View
-                            key={cfg.totalWeight}
-                            style={[
-                              styles.weightModalRow,
-                              {
-                                backgroundColor: isCur ? colors.primarySoft : colors.background,
-                                borderColor: isCur ? colors.primary : colors.border,
-                              },
-                            ]}
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Badge size="md" color="brand">
+                            סט {setNum} מתוך {effectiveSets}
+                          </Badge>
+                          <button
+                            type="button"
+                            onClick={() => startTimer(ex.restSec)}
+                            className="cursor-pointer rounded-full transition hover:opacity-85"
+                            title="הפעל טיימר מנוחה"
                           >
-                            <Pressable
-                              onPress={() => {
-                                selectWeightForSet(activeEx, activeSetNum, cfg.totalWeight);
-                                setWeightsModalOpen(false);
-                              }}
-                              style={styles.weightModalMainBtn}
+                            <BadgeWithIcon size="md" color="warning" iconLeading={Clock}>
+                              מנוחה: {ex.restSec} שניות
+                            </BadgeWithIcon>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2 border-b border-secondary pb-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <ButtonUtility
+                            size="xs"
+                            color="secondary"
+                            icon={ArrowRight}
+                            tooltip="תרגיל קודם"
+                            isDisabled={safeExIdx <= 0}
+                            onPress={() => goToExercise(safeExIdx - 1, 0)}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => setExerciseDropdownOpen(true)}
+                            className={`flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-lg bg-secondary_alt px-2.5 py-1.5 ring-1 transition ${
+                              exerciseDropdownOpen ? 'ring-2 ring-brand' : 'ring-secondary'
+                            }`}
+                          >
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <Badge size="sm" color={exAllDone ? 'success' : 'brand'}>
+                                {safeExIdx + 1}/{visibleExercises.length}
+                              </Badge>
+                              <span className="truncate text-sm font-bold text-primary">
+                                {ex.shortName}
+                              </span>
+                            </div>
+                            <span className="flex shrink-0 items-center gap-0.5 text-xs font-bold text-brand-secondary">
+                              <span>
+                                {exDoneCount}/{effectiveSets}
+                              </span>
+                              <ChevronDown className="size-3.5" />
+                            </span>
+                          </button>
+
+                          <ButtonUtility
+                            size="xs"
+                            color="secondary"
+                            icon={ArrowLeft}
+                            tooltip="תרגיל הבא"
+                            isDisabled={safeExIdx >= visibleExercises.length - 1}
+                            onPress={() => goToExercise(safeExIdx + 1, 0)}
+                          />
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                          <span className="min-w-0 flex-1 truncate text-[11px] text-tertiary">
+                            {conciseMetaText}
+                          </span>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <Badge size="sm" color="brand">
+                              סט {setNum}/{effectiveSets}
+                            </Badge>
+                            <button
+                              type="button"
+                              onClick={() => startTimer(ex.restSec)}
+                              className="cursor-pointer rounded-full"
                             >
-                              <View style={styles.weightModalTopLine}>
-                                <Text
-                                  style={[
-                                    styles.subCardTitle,
-                                    {
-                                      color: isCur ? colors.primary : colors.foreground,
-                                      fontFamily: fBold,
-                                    },
-                                  ]}
-                                >
-                                  {cfg.totalWeight === 0
-                                    ? '0 קילוגרם (משקל גוף)'
-                                    : `${cfg.totalWeight} קילוגרם`}
-                                </Text>
-                                {isCur && (
-                                  <View
-                                    style={[
-                                      styles.weightModalTag,
-                                      { backgroundColor: colors.primary },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.dropdownSetsText,
-                                        { color: colors.primaryForeground, fontFamily: fBold },
-                                      ]}
-                                    >
-                                      נבחר ✓
-                                    </Text>
-                                  </View>
-                                )}
-                                {isPrev && (
-                                  <View
-                                    style={[
-                                      styles.weightModalTag,
-                                      {
-                                        backgroundColor: colors.card,
-                                        borderWidth: 1,
-                                        borderColor: colors.border,
-                                      },
-                                    ]}
-                                  >
-                                    <Text
-                                      style={[
-                                        styles.dropdownSetsText,
-                                        { color: colors.mutedForeground, fontFamily: fSemi },
-                                      ]}
-                                    >
-                                      פעם קודמת
-                                    </Text>
-                                  </View>
-                                )}
-                              </View>
-                              <Text
-                                numberOfLines={2}
-                                style={[
-                                  styles.subCardText,
-                                  { color: colors.mutedForeground, fontFamily: fReg },
-                                ]}
-                              >
-                                {describeConfigSetup(cfg, modalMode)}
-                              </Text>
-                            </Pressable>
+                              <BadgeWithIcon size="sm" color="warning" iconLeading={Clock}>
+                                מנוחה: {ex.restSec} שניות
+                              </BadgeWithIcon>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                            {activeEffectiveSets > 1 && (
-                              <Pressable
-                                onPress={() => {
-                                  selectWeightForExercise(activeEx, cfg.totalWeight);
-                                  setWeightsModalOpen(false);
-                                }}
-                                style={[
-                                  styles.copyAllSetsBtn,
-                                  { backgroundColor: colors.card, borderColor: colors.border },
-                                ]}
+                    {isWide ? (
+                      <>
+                        <ExerciseTrendCard
+                          compact
+                          exerciseId={ex.id}
+                          workoutHistory={sortedHistoryDesc}
+                          liveBestWeight={bestWeightToday}
+                          colors={colors}
+                          fontsLoaded={fontsLoaded}
+                        />
+                        <div className="grid min-h-0 flex-1 grid-cols-12 gap-3">
+                          {/* Exercise Visual + Steps & Videos (Right in RTL -> cols 5) */}
+                          <div className="col-span-5 flex min-h-0 flex-col justify-between gap-2.5">
+                            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-secondary_alt p-2 ring-1 ring-secondary">
+                              <ExerciseAnimation
+                                compact
+                                exercise={ex}
+                                paused={animPaused}
+                                colors={colors}
+                                fontsLoaded={fontsLoaded}
+                              />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <Button
+                                size="xs"
+                                color="secondary"
+                                iconLeading={List}
+                                onPress={() => setExerciseStepsModalOpen(true)}
+                                className="flex-1 bg-brand-primary_alt text-brand-secondary ring-utility-brand-300"
                               >
-                                <Text
-                                  style={[
-                                    styles.copyAllSetsText,
-                                    { color: colors.primary, fontFamily: fSemi },
-                                  ]}
+                                שלבי ביצוע וטיפים ({ex.steps.length})
+                              </Button>
+                              {ex.videos.map((v) => (
+                                <Button
+                                  key={v.url}
+                                  href={v.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  size="xs"
+                                  color="secondary"
+                                  iconLeading={PlayCircle}
+                                  iconTrailing={ArrowUpRight}
                                 >
-                                  לכל הסטים
-                                </Text>
-                              </Pressable>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </ScrollView>
-                  </>
+                                  {v.label}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Active Set Controls & Weight Diagram (Left in RTL -> cols 7) */}
+                          <div className="col-span-7 flex min-h-0 flex-col justify-between">
+                            {renderSingleSetWorkspace()}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      renderSingleSetWorkspace()
+                    )}
+                  </div>
                 );
-              })()}
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* EXERCISE STEPS, TEMPO, VIDEOS & SAFETY MODAL */}
-      <Modal
-        visible={exerciseStepsModalOpen && !!activeEx}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setExerciseStepsModalOpen(false)}
-      >
-        <Pressable style={styles.modalBackdrop} onPress={() => setExerciseStepsModalOpen(false)}>
-          <Pressable
-            onPress={(e) => e.stopPropagation()}
-            style={[
-              styles.modalCard,
-              styles.dropdownListModal,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            {activeEx && (
-              <>
-                <View
-                  style={[
-                    styles.rowBetween,
-                    { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 },
-                  ]}
-                >
-                  <View style={styles.exerciseDropdownRight}>
-                    <ExerciseGifIcon
-                      exerciseId={activeEx.id}
-                      size={44}
-                      active
-                      borderColor={colors.border}
-                      activeBorderColor={colors.primary}
-                    />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text
-                        numberOfLines={2}
-                        style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}
-                      >
-                        {activeEx.name}
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={[
-                          styles.exMetaCompact,
-                          { color: colors.mutedForeground, fontFamily: fReg },
-                        ]}
-                      >
-                        {activeEx.muscle} • {activeEx.equipment}
-                      </Text>
-                    </View>
-                  </View>
-                  <Pressable
-                    onPress={() => setExerciseStepsModalOpen(false)}
-                    style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
-                  >
-                    <Text
-                      style={[
-                        styles.smallBtnText,
-                        { color: colors.secondaryForeground, fontFamily: fBold },
-                      ]}
-                    >
-                      סגור ✕
-                    </Text>
-                  </Pressable>
-                </View>
-
-                <ScrollView contentContainerStyle={{ gap: 10, paddingVertical: 6 }}>
-                  <View style={styles.tipsFooterRow}>
-                    <View
-                      style={[
-                        styles.tipCompactBox,
-                        { backgroundColor: colors.background, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.subCardText,
-                          { color: colors.mutedForeground, fontFamily: fReg },
-                        ]}
-                      >
-                        <Text style={{ color: colors.foreground, fontFamily: fBold }}>
-                          ⏱ קצב תנועה:{' '}
-                        </Text>
-                        {activeEx.tempo}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.tipCompactBox,
-                        {
-                          backgroundColor: scheme === 'dark' ? '#422006' : '#fef3c7',
-                          borderColor: scheme === 'dark' ? '#f59e0b' : '#d97706',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.subCardText,
-                          { color: scheme === 'dark' ? '#fbbf24' : '#b45309', fontFamily: fBold },
-                        ]}
-                      >
-                        ⏳ מנוחה בין סט לסט: {activeEx.restSec} שניות
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.subCard,
-                      { backgroundColor: colors.background, borderColor: colors.border, gap: 8 },
-                    ]}
-                  >
-                    <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                      📋 שלבי ביצוע:
-                    </Text>
-                    {activeEx.steps.map((st, sIdx) => (
-                      <View key={sIdx} style={styles.stepRow}>
-                        <View style={[styles.stepNumCircle, { backgroundColor: colors.secondary }]}>
-                          <Text
-                            style={[
-                              styles.stepNumText,
-                              { color: colors.secondaryForeground, fontFamily: fBold },
-                            ]}
-                          >
-                            {sIdx + 1}
-                          </Text>
-                        </View>
-                        <Text
-                          style={[
-                            styles.stepBodyTextCompact,
-                            { color: colors.foreground, fontFamily: fReg },
-                          ]}
-                        >
-                          {st}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  <View style={styles.tipsFooterRow}>
-                    <View
-                      style={[
-                        styles.tipCompactBox,
-                        { backgroundColor: colors.background, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.subCardText,
-                          { color: colors.mutedForeground, fontFamily: fReg },
-                        ]}
-                      >
-                        <Text style={{ color: colors.success, fontFamily: fBold }}>
-                          💡 למה זה טוב:{' '}
-                        </Text>
-                        {activeEx.homeTip}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.tipCompactBox,
-                        { backgroundColor: colors.background, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.subCardText,
-                          { color: colors.mutedForeground, fontFamily: fReg },
-                        ]}
-                      >
-                        <Text style={{ color: colors.danger, fontFamily: fBold }}>
-                          ⚠️ ממה להיזהר:{' '}
-                        </Text>
-                        {activeEx.avoid}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.videosRow}>
-                    {activeEx.videos.map((v) => (
-                      <Pressable
-                        key={v.url}
-                        onPress={() => Linking.openURL(v.url)}
-                        style={[
-                          styles.videoBtnCompact,
-                          { backgroundColor: colors.secondary, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          numberOfLines={1}
-                          style={[
-                            styles.smallBtnText,
-                            { color: colors.secondaryForeground, fontFamily: fSemi },
-                          ]}
-                        >
-                          🎬 {v.label} ↗
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </ScrollView>
-              </>
+              })()
+            ) : (
+              <div className="rounded-2xl bg-primary p-6 text-center text-sm text-tertiary ring-1 ring-secondary">
+                לא נמצאו תרגילים בסינון הנוכחי. בחר קבוצת שריר אחרת למעלה.
+              </div>
             )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </div>
+        </main>
+      )}
 
-      {/* GUIDE, EQUIPMENT INVENTORY & SAFETY MODAL */}
-      <Modal
-        visible={guideModalOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setGuideModalOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <View
-              style={[
-                styles.rowBetween,
-                { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 },
-              ]}
-            >
-              <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                📖 מדריך, ציוד ולוח שבועי
-              </Text>
-              {(timerRunning || timerFinished) && (
-                <View style={[styles.compactSyncBadge, { backgroundColor: colors.primarySoft }]}>
-                  <Text style={[styles.compactSyncText, { color: colors.primary, fontFamily: fBold }]}>
-                    {timerFinished ? '✓ המשך! 💪' : `⏱ ${formatTime(timerSeconds)}`}
-                  </Text>
-                </View>
-              )}
-              <Pressable
-                onPress={() => setGuideModalOpen(false)}
-                style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
+      {/* PROGRESS & WORKOUT LOG TAB */}
+      {!isWorkoutTab && (
+        <ProgressView
+          progressStats={progressStats}
+          chartExerciseId={chartExerciseId}
+          onSelectChartExercise={setChartExerciseId}
+          sortedHistoryDesc={sortedHistoryDesc}
+          syncStatus={syncStatus}
+          importModalOpen={importModalOpen}
+          onToggleImportModal={() => setImportModalOpen((o) => !o)}
+          importJsonText={importJsonText}
+          onChangeImportJsonText={setImportJsonText}
+          onExportBackup={handleExportBackup}
+          onApplyImportJson={handleApplyImportJson}
+          onDeleteSession={handleDeleteSession}
+          colors={colors}
+          fontsLoaded={fontsLoaded}
+        />
+      )}
+
+      {/* PERSISTENT BOTTOM DOCK: NAVIGATION + REST TIMER + LIVE STATS */}
+      <footer className="shrink-0 border-t border-secondary bg-primary px-2.5 py-2 sm:px-4 sm:py-2.5">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-2">
+          {isWorkoutTab && activeEx && (
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                size="sm"
+                color="secondary"
+                iconLeading={ArrowRight}
+                isDisabled={isAtVeryStart}
+                onPress={goPrevStep}
+                className="w-full"
               >
-                <Text
-                  style={[
-                    styles.smallBtnText,
-                    { color: colors.secondaryForeground, fontFamily: fBold },
-                  ]}
-                >
-                  סגור ✕
-                </Text>
-              </Pressable>
-            </View>
+                {prevBtnLabel}
+              </Button>
 
-            <ScrollView contentContainerStyle={{ gap: 12, paddingVertical: 6 }}>
-              {currentSetupMessage && (
-                <View
-                  style={[
-                    styles.subCard,
-                    { backgroundColor: colors.background, borderColor: colors.border },
-                  ]}
-                >
-                  <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                    {currentSetupMessage.title}
-                  </Text>
-                  <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
-                    {currentSetupMessage.desc}
-                  </Text>
-                </View>
-              )}
-
-              <View
-                style={[
-                  styles.inventoryStrip,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
-              >
-                <Text style={[styles.inventoryTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  📦 פרופיל הציוד והמשקלים הנתמכים ב-AI Trainer:
-                </Text>
-                <View style={styles.filterRow}>
-                  {EQUIPMENT_SUMMARY_ITEMS.map((item) => (
-                    <View
-                      key={item}
-                      style={[
-                        styles.inventoryChip,
-                        { backgroundColor: colors.card, borderColor: colors.border },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.pillBadgeText, { color: colors.foreground, fontFamily: fMed }]}
-                      >
-                        • {item}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-
-              <View style={[styles.glossaryGrid, isWide && styles.glossaryGridWide]}>
-                {GLOSSARY_ITEMS.map((item) => (
-                  <View
-                    key={item.title}
-                    style={[
-                      styles.subCard,
-                      isWide && styles.glossaryItemWide,
-                      { backgroundColor: colors.background, borderColor: colors.border },
-                    ]}
-                  >
-                    <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                      {item.title}
-                    </Text>
-                    <Text
-                      style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
-                    >
-                      {item.body}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              <View
-                style={[
-                  styles.subCard,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
-              >
-                <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  ⚠️ בטיחות עבודה עם ספסל אימון (עד 100 קילוגרם)
-                </Text>
-                <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
-                  כשמתאמנים עם ספסל בעל מגבלת עומס של עד 100 קילוגרם (משקל גוף + משקולות יחד), מומלץ שלא לשכב או לשבת עליו עם משקלים כבדים, אלא להישען עם יד אחת או להניח ידיים/רגליים כשהספסל צמוד לקיר.
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.subCard,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
-              >
-                <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  🏋️ דוגמה לשילוב שבועי מומלץ (כוח + אימונים פונקציונליים)
-                </Text>
-                <View style={styles.weekRow}>
-                  {WEEKLY_SCHEDULE.map((d) => {
-                    const isPrimary = d.highlight === 'primary';
-                    const isSec = d.highlight === 'secondary';
-                    const bg = isPrimary
-                      ? colors.primary
-                      : isSec
-                      ? colors.secondary
-                      : colors.card;
-                    const fg = isPrimary
-                      ? colors.primaryForeground
-                      : isSec
-                      ? colors.secondaryForeground
-                      : colors.foreground;
-                    return (
-                      <View
-                        key={d.day}
-                        style={[styles.dayBox, { backgroundColor: bg, borderColor: colors.border }]}
-                      >
-                        <Text style={[styles.dayBoxTitle, { color: fg, fontFamily: fBold }]}>
-                          {d.day}
-                        </Text>
-                        <Text style={[styles.dayBoxSub, { color: fg, fontFamily: fReg }]}>
-                          {d.label}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-
-              <Pressable
+              <Button
+                size="sm"
+                color="secondary"
+                iconLeading={Save01}
                 onPress={() => {
-                  clearSetCheckmarks();
-                  setGuideModalOpen(false);
+                  setSaveFeedback(null);
+                  setSaveModalOpen(true);
                 }}
-                style={[
-                  styles.outlineBtn,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
+                className={`w-full ${
+                  totalDoneInView > 0
+                    ? 'bg-brand-primary_alt text-brand-secondary ring-utility-brand-300'
+                    : ''
+                }`}
               >
-                <Text style={[styles.smallBtnText, { color: colors.danger, fontFamily: fSemi }]}>
-                  🧹 נקה את כל סימוני הסטים באימון הנוכחי
-                </Text>
-              </Pressable>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+                שמור ({totalDoneInView}/{totalSetsInView})
+              </Button>
 
-      {/* SAVE WORKOUT MODAL */}
-      <Modal
-        visible={saveModalOpen}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setSaveModalOpen(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[
-              styles.modalCard,
-              styles.saveModalCard,
-              { backgroundColor: colors.card, borderColor: colors.primary },
-            ]}
-          >
-            <View style={styles.rowBetween}>
-              <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                🎉 שמירת האימון ביומן ההתקדמות
-              </Text>
-              {(timerRunning || timerFinished) && (
-                <View style={[styles.compactSyncBadge, { backgroundColor: colors.primarySoft }]}>
-                  <Text style={[styles.compactSyncText, { color: colors.primary, fontFamily: fBold }]}>
-                    {timerFinished ? '✓ המשך! 💪' : `⏱ ${formatTime(timerSeconds)}`}
-                  </Text>
-                </View>
-              )}
-              <Pressable
-                onPress={() => setSaveModalOpen(false)}
-                style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
+              <Button
+                size="sm"
+                color="primary"
+                iconTrailing={isAtVeryEnd ? Flag01 : ArrowLeft}
+                onPress={goNextStep}
+                className={`w-full ${isAtVeryEnd ? 'bg-bg-success-solid hover:bg-bg-success-solid' : ''}`}
               >
-                <Text
-                  style={[
-                    styles.smallBtnText,
-                    { color: colors.secondaryForeground, fontFamily: fBold },
-                  ]}
-                >
-                  סגור ✕
-                </Text>
-              </Pressable>
-            </View>
+                {nextBtnLabel}
+              </Button>
+            </div>
+          )}
 
-            <View style={[styles.pillBadge, { backgroundColor: colors.secondary, alignSelf: 'flex-end' }]}>
-              <Text
-                style={[
-                  styles.pillBadgeText,
-                  { color: colors.secondaryForeground, fontFamily: fBold },
-                ]}
+          {/* Persistent Rest Watch + Stats Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div
+              className={`flex items-center gap-1.5 rounded-lg px-2 py-1 ring-1 ${
+                timerFinished
+                  ? 'bg-success-primary ring-utility-green-300'
+                  : 'bg-secondary_alt ring-secondary'
+              }`}
+            >
+              <span
+                className={`flex min-w-16 items-center gap-1 font-mono text-xs font-bold sm:text-sm ${
+                  timerFinished ? 'text-success-primary' : 'text-primary'
+                }`}
               >
-                {totalDoneInView} מתוך {totalSetsInView} סטים סומנו כבוצעו
-              </Text>
-            </View>
+                {timerFinished ? (
+                  <CheckCircle className="size-3.5 shrink-0" />
+                ) : (
+                  <Clock className="size-3.5 shrink-0 text-fg-brand-primary" />
+                )}
+                <span>{timerFinished ? 'המשך!' : formatTime(timerSeconds)}</span>
+              </span>
 
-            <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
-              כל הסטים שסימנת (כולל המשקלים ומספר החזרות) יישמרו עם התאריך של היום בענן ועל המכשיר, ויעדכנו אוטומטית את נתוני הפעם הקודמת והמגמה בכל תרגיל!
-            </Text>
-
-            <TextInput
-              value={workoutNote}
-              onChangeText={setWorkoutNote}
-              placeholder="הערה לעצמך לפעם הבאה (לא חובה – למשל: היה קל בלחיצת חזה, לעלות מדרגה במשקל)"
-              placeholderTextColor={colors.mutedForeground}
-              style={[
-                styles.noteInput,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                  color: colors.foreground,
-                  fontFamily: fReg,
-                },
-              ]}
-            />
-
-            {saveFeedback && (
-              <Text
-                style={[
-                  styles.feedbackText,
-                  {
-                    color: saveFeedback.error ? colors.danger : colors.success,
-                    fontFamily: fSemi,
-                  },
-                ]}
+              <Button
+                size="xs"
+                color={timerRunning ? 'primary-destructive' : 'primary'}
+                onPress={toggleTimer}
+                className="px-2.5 py-1 text-xs"
               >
-                {saveFeedback.text}
-              </Text>
-            )}
-
-            <View style={styles.rowBetween}>
-              <Pressable
-                onPress={clearSetCheckmarks}
-                style={[
-                  styles.outlineBtn,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
+                {timerRunning ? 'עצור' : 'הפעל'}
+              </Button>
+              <Button
+                size="xs"
+                color="secondary"
+                onPress={() => startTimer(60)}
+                className="px-2 py-1 text-xs"
               >
-                <Text
-                  style={[styles.smallBtnText, { color: colors.mutedForeground, fontFamily: fMed }]}
-                >
-                  🧹 נקה סימוני סטים
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={handleSaveWorkoutSession}
-                style={[styles.savePrimaryBtn, { backgroundColor: colors.primary }]}
+                60 שניות
+              </Button>
+              <Button
+                size="xs"
+                color="secondary"
+                onPress={() => startTimer(90)}
+                className="px-2 py-1 text-xs"
               >
-                <Text
-                  style={[
-                    styles.savePrimaryBtnText,
-                    { color: colors.primaryForeground, fontFamily: fBold },
-                  ]}
-                >
-                  💾 שמור אימון ביומן
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+                90 שניות
+              </Button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (currentTab !== 'progress') selectMainTab('progress');
+              }}
+              className="cursor-pointer rounded-full transition hover:opacity-85"
+            >
+              <BadgeWithIcon size="sm" color="gray" type="modern" iconLeading={Award01}>
+                {isWide
+                  ? `${totalSetsInView > 0 ? `סטים: ${totalDoneInView}/${totalSetsInView} • ` : ''}${progressStats.weekWorkouts} השבוע • ${progressStats.totalWorkouts} אימונים`
+                  : totalSetsInView > 0
+                  ? `${totalDoneInView}/${totalSetsInView} • ${progressStats.totalWorkouts} אימונים`
+                  : `${progressStats.totalWorkouts} אימונים`}
+              </BadgeWithIcon>
+            </button>
+          </div>
+        </div>
+      </footer>
+
+      {/* MODALS (Untitled UI ModalOverlay + Modal + Dialog) */}
+      <ExerciseSwitcherModal
+        isOpen={exerciseDropdownOpen}
+        onClose={() => setExerciseDropdownOpen(false)}
+        visibleExercises={visibleExercises}
+        safeExIdx={safeExIdx}
+        getExerciseDoneStats={getExerciseDoneStats}
+        getLastExerciseLog={getLastExerciseLog}
+        onSelectExercise={(idx) => goToExercise(idx, 0)}
+        colors={colors}
+      />
+
+      <WeightsPickerModal
+        isOpen={weightsModalOpen}
+        onClose={() => setWeightsModalOpen(false)}
+        activeEx={activeEx}
+        activeSetNum={activeSetNum}
+        activeEffectiveSets={activeEffectiveSets}
+        modalConfigs={activeEx ? getConfigsForExercise(activeEx) : []}
+        modalMode={activeEx ? getEffectiveMode(activeEx) : 'pair'}
+        modalEntry={activeEx ? getSetEntry(activeEx, activeSetNum) : null}
+        workoutHistory={sortedHistoryDesc}
+        colors={colors}
+        onSelectWeightForSet={selectWeightForSet}
+        onSelectWeightForAllSets={selectWeightForExercise}
+      />
+
+      <ExerciseStepsModal
+        isOpen={exerciseStepsModalOpen}
+        onClose={() => setExerciseStepsModalOpen(false)}
+        activeEx={activeEx}
+        colors={colors}
+      />
+
+      <GuideModal
+        isOpen={guideModalOpen}
+        onClose={() => setGuideModalOpen(false)}
+        timerRunning={timerRunning}
+        timerFinished={timerFinished}
+        timerSeconds={timerSeconds}
+        currentSetupMessage={currentSetupMessage}
+        onClearSetCheckmarks={clearSetCheckmarks}
+      />
+
+      <SaveWorkoutModal
+        isOpen={saveModalOpen}
+        onClose={() => setSaveModalOpen(false)}
+        timerRunning={timerRunning}
+        timerFinished={timerFinished}
+        timerSeconds={timerSeconds}
+        totalDoneInView={totalDoneInView}
+        totalSetsInView={totalSetsInView}
+        workoutNote={workoutNote}
+        onChangeWorkoutNote={setWorkoutNote}
+        saveFeedback={saveFeedback}
+        onClearSetCheckmarks={clearSetCheckmarks}
+        onSaveWorkoutSession={handleSaveWorkoutSession}
+      />
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  safeRoot: {
-    flex: 1,
-  },
-  webFullscreenRoot: {
-    width: '100%',
-    height: '100%',
-    flex: 1,
-    overflow: 'hidden',
-  },
-  flexOne: {
-    flex: 1,
-  },
-  topShell: {
-    borderBottomWidth: 1,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 8,
-    gap: 8,
-  },
-  topRow1: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  topBrandTitleRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-  },
-  compactTitle: {
-    fontSize: 16,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  compactSyncBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  compactSyncText: {
-    fontSize: 11,
-    writingDirection: 'rtl',
-  },
-  topUtilityRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-  },
-  utilityBtn: {
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  utilityBtnText: {
-    fontSize: 11,
-    writingDirection: 'rtl',
-  },
-  dedicatedActionBtn: {
-    borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dedicatedActionText: {
-    fontSize: 12,
-    writingDirection: 'rtl',
-  },
-  compactTimerVal: {
-    fontSize: 14,
-    marginLeft: 2,
-  },
-  miniTimerBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 7,
-  },
-  miniTimerBtnText: {
-    fontSize: 11,
-    writingDirection: 'rtl',
-  },
-  topTabsScroll: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 2,
-  },
-  tabBtnCompact: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  tabBtnCompactText: {
-    fontSize: 12,
-    writingDirection: 'rtl',
-  },
-  filterChipCompact: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 9,
-    borderWidth: 1,
-  },
-  dropdownRowWrap: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 2,
-  },
-  dropdownStepArrowBtn: {
-    width: 34,
-    height: 34,
-    borderWidth: 1,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exerciseDropdownBtn: {
-    flex: 1,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    minHeight: 34,
-  },
-  exerciseDropdownRight: {
-    flex: 1,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dropdownCountBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  dropdownCountText: {
-    fontSize: 11,
-  },
-  exerciseDropdownTitle: {
-    flex: 1,
-    fontSize: 13,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  exerciseDropdownLeft: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dropdownSetsPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  dropdownSetsText: {
-    fontSize: 11,
-    writingDirection: 'rtl',
-  },
-  dropdownChevron: {
-    fontSize: 12,
-    writingDirection: 'rtl',
-  },
-  dropdownListModal: {
-    maxWidth: 560,
-    maxHeight: '80%',
-  },
-  dropdownListRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  fullscreenWorkoutStage: {
-    flex: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    overflow: 'hidden',
-  },
-  fullscreenExCard: {
-    flex: 1,
-    width: '100%',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 10,
-    gap: 8,
-    overflow: 'hidden',
-  },
-  exHeaderCompact: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    borderBottomWidth: 1,
-    paddingBottom: 6,
-  },
-  exHeaderTitleGroup: {
-    flex: 1,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 8,
-  },
-  exTitleCompact: {
-    fontSize: 15,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  exMetaCompact: {
-    fontSize: 11,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  exBodyGridWideFull: {
-    flex: 1,
-    flexDirection: 'row-reverse',
-    gap: 12,
-    overflow: 'hidden',
-  },
-  exGuidanceColWide: {
-    width: '43%',
-    flexShrink: 0,
-    overflow: 'hidden',
-  },
-  exSetColWide: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  singleSetWorkspace: {
-    flex: 1,
-    gap: 6,
-    justifyContent: 'space-between',
-    overflow: 'hidden',
-  },
-  setSwitcherBar: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  setPillsRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-  },
-  setSelectorPill: {
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  setSelectorPillText: {
-    fontSize: 12,
-    writingDirection: 'rtl',
-  },
-  modeToggleBtnCompact: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  activeSetControlBox: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 8,
-    gap: 6,
-  },
-  setControlsMainRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  doneBtnCompact: {
-    flexGrow: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 9,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipsInlineBar: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  quickWeightsRow: {
-    flex: 1,
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 5,
-  },
-  weightOptionChipCompact: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    minWidth: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moreWeightsChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dualVisualRow: {
-    flex: 1,
-    flexDirection: 'row-reverse',
-    gap: 6,
-    overflow: 'hidden',
-  },
-  weightModalRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    borderWidth: 1.5,
-    borderRadius: 11,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  weightModalMainBtn: {
-    flex: 1,
-    gap: 2,
-  },
-  weightModalTopLine: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  weightModalTag: {
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-  },
-  guidancePane: {
-    flex: 1,
-    gap: 8,
-    overflow: 'hidden',
-  },
-  guidanceToggleRow: {
-    flexDirection: 'row-reverse',
-    gap: 6,
-  },
-  guidanceToggleBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  guidanceContentCol: {
-    flex: 1,
-    gap: 8,
-    overflow: 'hidden',
-  },
-  videoBtnCompact: {
-    flexGrow: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 9,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  stepsFitCard: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
-    justifyContent: 'space-between',
-    gap: 6,
-    overflow: 'hidden',
-  },
-  stepBodyTextCompact: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 17,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  tipsFooterRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  tipCompactBox: {
-    flex: 1,
-    minWidth: 160,
-    borderWidth: 1,
-    borderRadius: 9,
-    padding: 7,
-  },
-  bottomDock: {
-    borderTopWidth: 1,
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 8,
-    gap: 8,
-  },
-  bottomNavRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    borderBottomWidth: 1,
-    paddingBottom: 8,
-  },
-  bottomNavBtn: {
-    borderWidth: 1,
-    borderRadius: 11,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minWidth: 88,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomSaveBtn: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderRadius: 11,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomNavBtnText: {
-    fontSize: 13,
-    writingDirection: 'rtl',
-  },
-  watchStatsBar: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  watchCluster: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 5,
-    borderWidth: 1,
-    borderRadius: 11,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  statsCluster: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 6,
-  },
-  bottomStatPill: {
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  bottomStatText: {
-    fontSize: 11,
-    writingDirection: 'rtl',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.58)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 14,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 720,
-    maxHeight: '88%',
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    gap: 10,
-  },
-  saveModalCard: {
-    maxWidth: 520,
-    borderWidth: 2,
-    gap: 12,
-  },
-  scrollContent: {
-    paddingHorizontal: 14,
-    paddingVertical: 18,
-    alignItems: 'center',
-  },
-  maxWidthWrap: {
-    width: '100%',
-    maxWidth: 1120,
-    gap: 16,
-  },
-  card: {
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 18,
-    gap: 14,
-  },
-  subCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    gap: 6,
-  },
-  pillBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-  },
-  pillBadgeText: {
-    fontSize: 12,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  inventoryStrip: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-    gap: 8,
-  },
-  inventoryTitle: {
-    fontSize: 12,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  inventoryChip: {
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  smallBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primarySmallBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  outlineBtn: {
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 9,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  smallBtnText: {
-    fontSize: 12,
-    textAlign: 'center',
-    writingDirection: 'rtl',
-  },
-  glossaryGrid: {
-    gap: 10,
-  },
-  glossaryGridWide: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-  },
-  glossaryItemWide: {
-    width: '48.8%',
-  },
-  twoColGrid: {
-    gap: 10,
-  },
-  twoColGridWide: {
-    flexDirection: 'row-reverse',
-  },
-  subCardTitle: {
-    fontSize: 14,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  subCardText: {
-    fontSize: 12,
-    lineHeight: 19,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  rowBetween: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  weekRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 5,
-    marginTop: 4,
-  },
-  dayBox: {
-    flexGrow: 1,
-    minWidth: 62,
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    alignItems: 'center',
-  },
-  dayBoxTitle: {
-    fontSize: 12,
-  },
-  dayBoxSub: {
-    fontSize: 12,
-  },
-  tabCountBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  tabCountText: {
-    fontSize: 12,
-  },
-  setupActionsRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  filterRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  indexBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  indexBadgeText: {
-    fontSize: 14,
-  },
-  videosRow: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  stepRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  stepNumCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  stepNumText: {
-    fontSize: 12,
-  },
-  modeToggleWrap: {
-    flexDirection: 'row-reverse',
-    gap: 6,
-  },
-  copyAllSetsBtn: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  copyAllSetsText: {
-    fontSize: 11,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  chipsScrollRow: {
-    flexDirection: 'row-reverse',
-    gap: 6,
-    paddingVertical: 2,
-  },
-  stepperGroup: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 5,
-  },
-  stepperBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperBtnText: {
-    fontSize: 15,
-  },
-  weightDisplayPill: {
-    minWidth: 84,
-    height: 30,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperInputSmall: {
-    width: 42,
-    height: 30,
-    borderRadius: 8,
-    borderWidth: 1,
-    textAlign: 'center',
-    fontSize: 12,
-    paddingVertical: 2,
-  },
-  unitLabel: {
-    fontSize: 12,
-    marginRight: 2,
-  },
-  saveCardTitle: {
-    fontSize: 16,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  noteInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 13,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  savePrimaryBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  savePrimaryBtnText: {
-    fontSize: 14,
-  },
-  feedbackText: {
-    fontSize: 12,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  statsGrid: {
-    gap: 12,
-  },
-  statsGridWide: {
-    flexDirection: 'row-reverse',
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'flex-end',
-    gap: 4,
-  },
-  statBigNum: {
-    fontSize: 28,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  gifPickerGrid: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  gifExerciseTile: {
-    width: 82,
-    borderWidth: 1.5,
-    borderRadius: 16,
-    paddingHorizontal: 5,
-    paddingVertical: 6,
-    alignItems: 'center',
-    gap: 5,
-  },
-  gifTileLabel: {
-    fontSize: 11,
-    textAlign: 'center',
-    writingDirection: 'rtl',
-    width: '100%',
-  },
-  chartSelectedBanner: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  historyItemHeader: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerBadgesCol: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 4,
-  },
-  restTagBadge: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-  },
-  restTagText: {
-    fontSize: 11,
-    writingDirection: 'rtl',
-  },
-  infoQuickStrip: {
-    flexDirection: 'row-reverse',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  stepsModalTriggerBtn: {
-    flexGrow: 1,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 9,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  videoQuickChip: {
-    flexGrow: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 9,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topShellMobile: {
-    paddingHorizontal: 8,
-    paddingTop: 6,
-    paddingBottom: 6,
-    gap: 5,
-  },
-  topRow1Mobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    gap: 5,
-  },
-  topBrandTitleRowMobile: {
-    width: '100%',
-    flexWrap: 'nowrap',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 6,
-  },
-  topBrandLeftGroup: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
-  },
-  utilityBtnCompact: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topUtilityRowMobile: {
-    width: '100%',
-    flexWrap: 'nowrap',
-    gap: 5,
-  },
-  dedicatedActionBtnMobile: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderRadius: 9,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mobileNavTabsRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 5,
-    width: '100%',
-  },
-  mobileTabBtnCompact: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 4,
-    paddingVertical: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mobileTabBtnCompactText: {
-    fontSize: 11,
-    textAlign: 'center',
-    writingDirection: 'rtl',
-  },
-  fullscreenWorkoutStageMobile: {
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-  },
-  fullscreenExCardMobile: {
-    padding: 7,
-    gap: 5,
-  },
-  exHeaderMobileWrap: {
-    borderBottomWidth: 1,
-    paddingBottom: 5,
-    gap: 4,
-  },
-  mobileCardSwitcherRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 5,
-  },
-  mobileCardArrowBtn: {
-    width: 30,
-    height: 36,
-    borderWidth: 1,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mobileCardDropdownPill: {
-    flex: 1,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1.5,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minHeight: 38,
-  },
-  mobileCardDropdownTitle: {
-    flex: 1,
-    fontSize: 13,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  mobileCardDropdownArrow: {
-    fontSize: 11,
-    writingDirection: 'rtl',
-  },
-  mobileCardMetaRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  exMetaMobileCompact: {
-    flex: 1,
-    fontSize: 10.5,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  mobileMetaTagsGroup: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 4,
-  },
-  compactPillTag: {
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  compactPillTagText: {
-    fontSize: 10.5,
-    writingDirection: 'rtl',
-  },
-  restTagBadgeCompact: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  restTagTextCompact: {
-    fontSize: 10.5,
-    writingDirection: 'rtl',
-  },
-  singleSetWorkspaceMobile: {
-    gap: 5,
-  },
-  activeSetControlBoxMobile: {
-    padding: 6,
-    gap: 5,
-  },
-  dualVisualRowMobile: {
-    minHeight: 145,
-  },
-  bottomDockMobile: {
-    paddingHorizontal: 8,
-    paddingTop: 5,
-    paddingBottom: 6,
-    gap: 5,
-  },
-  bottomNavRowMobile: {
-    paddingBottom: 5,
-    gap: 6,
-  },
-  bottomNavBtnMobile: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    minWidth: 78,
-  },
-  watchStatsBarMobile: {
-    flexWrap: 'nowrap',
-    gap: 5,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  watchClusterMobile: {
-    flexShrink: 1,
-    flexWrap: 'nowrap',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  compactTimerValMobile: {
-    fontSize: 12.5,
-  },
-  miniTimerBtnMobile: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  statsClusterMobile: {
-    flexShrink: 0,
-    flexWrap: 'nowrap',
-  },
-  bottomStatPillMobile: {
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-  },
-  controlsSplitRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 8,
-  },
-  metricSubCard: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    gap: 4,
-  },
-  weightMetricSubCard: {
-    flex: 1.35,
-  },
-  repsMetricSubCard: {
-    flex: 1,
-  },
-  metricSubHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 4,
-  },
-  metricSubLabel: {
-    fontSize: 10.5,
-    writingDirection: 'rtl',
-  },
-  applyAllInlinePill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  applyAllInlineText: {
-    fontSize: 10,
-    writingDirection: 'rtl',
-  },
-  metricStepperRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 4,
-  },
-  metricStepperBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metricValueCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metricValueBig: {
-    fontSize: 14,
-    lineHeight: 16,
-  },
-  metricValueUnit: {
-    fontSize: 9.5,
-    lineHeight: 11,
-    writingDirection: 'rtl',
-  },
-  metricRepsInput: {
-    flex: 1,
-    minWidth: 34,
-    maxWidth: 52,
-    height: 28,
-    borderRadius: 8,
-    borderWidth: 1,
-    textAlign: 'center',
-    fontSize: 14,
-    paddingVertical: 2,
-  },
-  quickWeightsStrip: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 5,
-    width: '100%',
-  },
-  weightOptionChipSegmented: {
-    flex: 1,
-    paddingHorizontal: 4,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  moreWeightsChipSegmented: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneBtnFull: {
-    width: '100%',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 9,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneBtnFullText: {
-    fontSize: 12.5,
-    writingDirection: 'rtl',
-  },
-});

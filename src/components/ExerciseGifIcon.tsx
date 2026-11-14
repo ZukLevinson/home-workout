@@ -26,7 +26,7 @@ export default function ExerciseGifIcon({
   exerciseId,
   size = 60,
   active = false,
-  borderColor = '#1e293b',
+  borderColor = '#262626',
   activeBorderColor = '#3b82f6',
 }: ExerciseGifIconProps): React.ReactElement | null {
   const source = EXERCISE_GIF_MAP[exerciseId];
