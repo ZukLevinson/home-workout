@@ -32,6 +32,7 @@ export interface Exercise {
   orderA?: number;
   orderB?: number;
   name: string;
+  shortName: string;
   muscle: string;
   secondaryMuscles: string;
   equipment: string;

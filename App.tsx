@@ -40,6 +40,7 @@ import {
 import ExerciseAnimation from './src/components/ExerciseAnimation';
 import EquipmentBuildDiagram from './src/components/EquipmentBuildDiagram';
 import ExerciseTrendCard, { getExerciseTrendSummary } from './src/components/ExerciseTrendCard';
+import ExerciseGifIcon from './src/components/ExerciseGifIcon';
 import ProgressChart from './src/components/ProgressChart';
 import { isFirebaseConfigured } from './src/firebaseConfig';
 import {
@@ -1037,6 +1038,13 @@ export default function App(): React.ReactElement {
                 ]}
               >
                 <View style={styles.exerciseDropdownRight}>
+                  <ExerciseGifIcon
+                    exerciseId={activeEx.id}
+                    size={34}
+                    active
+                    borderColor={colors.border}
+                    activeBorderColor="#a3e635"
+                  />
                   <View
                     style={[
                       styles.dropdownCountBadge,
@@ -1059,7 +1067,7 @@ export default function App(): React.ReactElement {
                       { color: colors.foreground, fontFamily: fBold },
                     ]}
                   >
-                    {activeEx.name}
+                    {isWide ? activeEx.name : activeEx.shortName}
                   </Text>
                 </View>
 
@@ -1700,22 +1708,19 @@ export default function App(): React.ReactElement {
                   {/* Compact Single-Line Exercise Header */}
                   <View style={[styles.exHeaderCompact, { borderBottomColor: colors.border }]}>
                     <View style={styles.exHeaderTitleGroup}>
-                      <View style={[styles.indexBadge, { backgroundColor: colors.primary }]}>
-                        <Text
-                          style={[
-                            styles.indexBadgeText,
-                            { color: colors.primaryForeground, fontFamily: fBold },
-                          ]}
-                        >
-                          {idx + 1}
-                        </Text>
-                      </View>
+                      <ExerciseGifIcon
+                        exerciseId={ex.id}
+                        size={46}
+                        active
+                        borderColor={colors.border}
+                        activeBorderColor="#a3e635"
+                      />
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text
                           numberOfLines={1}
                           style={[styles.exTitleCompact, { color: colors.foreground, fontFamily: fBold }]}
                         >
-                          {ex.name}
+                          {idx + 1}. {ex.name}
                         </Text>
                         <Text
                           numberOfLines={1}
@@ -1977,10 +1982,10 @@ export default function App(): React.ReactElement {
                   <Text
                     style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
                   >
-                    בחר תרגיל כדי לראות איך המשקל המקסימלי שלך בו עולה מאימון לאימון:
+                    בחרו תרגיל כדי לצפות בעליית המשקל מאימון לאימון:
                   </Text>
 
-                  <View style={styles.filterRow}>
+                  <View style={styles.gifPickerGrid}>
                     {EXERCISES.map((ex, i) => {
                       const active = chartExerciseId === ex.id;
                       return (
@@ -1988,28 +1993,59 @@ export default function App(): React.ReactElement {
                           key={ex.id}
                           onPress={() => setChartExerciseId(ex.id)}
                           style={[
-                            styles.filterChip,
+                            styles.gifExerciseTile,
                             {
-                              backgroundColor: active ? colors.primary : colors.background,
+                              backgroundColor: active ? colors.primarySoft : colors.background,
                               borderColor: active ? colors.primary : colors.border,
                             },
                           ]}
                         >
+                          <ExerciseGifIcon
+                            exerciseId={ex.id}
+                            size={60}
+                            active={active}
+                            borderColor={colors.border}
+                            activeBorderColor="#a3e635"
+                          />
                           <Text
+                            numberOfLines={1}
                             style={[
-                              styles.smallBtnText,
+                              styles.gifTileLabel,
                               {
-                                color: active ? colors.primaryForeground : colors.foreground,
-                                fontFamily: fMed,
+                                color: active ? colors.primary : colors.foreground,
+                                fontFamily: active ? fBold : fSemi,
                               },
                             ]}
                           >
-                            {i + 1}. {ex.name}
+                            {i + 1}. {ex.shortName}
                           </Text>
                         </Pressable>
                       );
                     })}
                   </View>
+
+                  {(() => {
+                    const selectedEx = EXERCISES.find((e) => e.id === chartExerciseId);
+                    if (!selectedEx) return null;
+                    return (
+                      <View
+                        style={[
+                          styles.chartSelectedBanner,
+                          { backgroundColor: colors.background, borderColor: colors.border },
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.subCardText, { color: colors.foreground, fontFamily: fBold }]}
+                        >
+                          {selectedEx.name}{' '}
+                          <Text style={{ color: colors.mutedForeground, fontFamily: fReg }}>
+                            ({selectedEx.muscle})
+                          </Text>
+                        </Text>
+                      </View>
+                    );
+                  })()}
 
                   <ProgressChart
                     exerciseId={chartExerciseId}
@@ -2233,48 +2269,61 @@ export default function App(): React.ReactElement {
                           )}
 
                           <View style={{ gap: 8 }}>
-                            {(sess.items || []).map((item, idx2) => (
-                              <View
-                                key={`${item.exId}-${idx2}`}
-                                style={[
-                                  styles.subCard,
-                                  {
-                                    backgroundColor: colors.card,
-                                    borderColor: colors.border,
-                                    padding: 10,
-                                  },
-                                ]}
-                              >
-                                <Text
+                            {(sess.items || []).map((item, idx2) => {
+                              const exMeta = EXERCISES.find((e) => e.id === item.exId);
+                              return (
+                                <View
+                                  key={`${item.exId}-${idx2}`}
                                   style={[
-                                    styles.subCardText,
-                                    { color: colors.foreground, fontFamily: fBold },
+                                    styles.subCard,
+                                    {
+                                      backgroundColor: colors.card,
+                                      borderColor: colors.border,
+                                      padding: 10,
+                                    },
                                   ]}
                                 >
-                                  {item.exName}
-                                </Text>
-                                <View style={styles.filterRow}>
-                                  {(item.sets || []).map((st) => (
-                                    <View
-                                      key={st.setNum}
-                                      style={[
-                                        styles.pillBadge,
-                                        { backgroundColor: colors.secondary },
-                                      ]}
-                                    >
+                                  <View style={styles.historyItemHeader}>
+                                    <ExerciseGifIcon
+                                      exerciseId={item.exId}
+                                      size={42}
+                                      borderColor={colors.border}
+                                    />
+                                    <View style={{ flex: 1, gap: 4 }}>
                                       <Text
+                                        numberOfLines={1}
                                         style={[
-                                          styles.pillBadgeText,
-                                          { color: colors.secondaryForeground, fontFamily: fMed },
+                                          styles.subCardText,
+                                          { color: colors.foreground, fontFamily: fBold },
                                         ]}
                                       >
-                                        סט {st.setNum}: {st.weight} קילוגרם × {st.reps} חזרות
+                                        {exMeta ? exMeta.shortName : item.exName}
                                       </Text>
+                                      <View style={styles.filterRow}>
+                                        {(item.sets || []).map((st) => (
+                                          <View
+                                            key={st.setNum}
+                                            style={[
+                                              styles.pillBadge,
+                                              { backgroundColor: colors.secondary },
+                                            ]}
+                                          >
+                                            <Text
+                                              style={[
+                                                styles.pillBadgeText,
+                                                { color: colors.secondaryForeground, fontFamily: fMed },
+                                              ]}
+                                            >
+                                              סט {st.setNum}: {st.weight} קילוגרם × {st.reps} חזרות
+                                            </Text>
+                                          </View>
+                                        ))}
+                                      </View>
                                     </View>
-                                  ))}
+                                  </View>
                                 </View>
-                              </View>
-                            ))}
+                              );
+                            })}
                           </View>
                         </View>
                       ))}
@@ -2872,43 +2921,25 @@ export default function App(): React.ReactElement {
                     ]}
                   >
                     <View style={styles.exerciseDropdownRight}>
-                      <View
-                        style={[
-                          styles.indexBadge,
-                          {
-                            backgroundColor: isCur
-                              ? colors.primary
-                              : allDone
-                              ? colors.success
-                              : colors.secondary,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.indexBadgeText,
-                            {
-                              color:
-                                isCur || allDone
-                                  ? colors.primaryForeground
-                                  : colors.secondaryForeground,
-                              fontFamily: fBold,
-                            },
-                          ]}
-                        >
-                          {allDone ? '✓' : idx + 1}
-                        </Text>
-                      </View>
+                      <ExerciseGifIcon
+                        exerciseId={itemEx.id}
+                        size={52}
+                        active={isCur}
+                        borderColor={colors.border}
+                        activeBorderColor="#a3e635"
+                      />
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text
+                          numberOfLines={1}
                           style={[
                             styles.subCardTitle,
                             { color: colors.foreground, fontFamily: fBold },
                           ]}
                         >
-                          {itemEx.name}
+                          {idx + 1}. {itemEx.shortName}
                         </Text>
                         <Text
+                          numberOfLines={1}
                           style={[
                             styles.subCardText,
                             { color: colors.mutedForeground, fontFamily: fReg },
@@ -4348,5 +4379,37 @@ const styles = StyleSheet.create({
     opacity: 0.35,
     borderTopRightRadius: 4,
     borderBottomRightRadius: 4,
+  },
+  gifPickerGrid: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  gifExerciseTile: {
+    width: 82,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingHorizontal: 5,
+    paddingVertical: 6,
+    alignItems: 'center',
+    gap: 5,
+  },
+  gifTileLabel: {
+    fontSize: 11,
+    textAlign: 'center',
+    writingDirection: 'rtl',
+    width: '100%',
+  },
+  chartSelectedBanner: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  historyItemHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 10,
   },
 });
