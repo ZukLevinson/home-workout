@@ -19,7 +19,7 @@ export interface ThemeColors {
 
 export type EquipmentMode = 'pair' | 'single' | 'barbell' | 'platePair' | 'bodyweight';
 
-export type WorkoutTabKey = 'workoutA' | 'workoutB' | 'express' | 'progress' | 'all' | 'calculator';
+export type WorkoutTabKey = 'workoutA' | 'workoutB' | 'progress' | 'all' | 'calculator';
 
 export interface ExerciseVideo {
   label: string;
@@ -28,10 +28,9 @@ export interface ExerciseVideo {
 
 export interface Exercise {
   id: string;
-  workouts: ('workoutA' | 'workoutB' | 'express')[];
+  workouts: ('workoutA' | 'workoutB')[];
   orderA?: number;
   orderB?: number;
-  orderExpress?: number;
   name: string;
   muscle: string;
   secondaryMuscles: string;

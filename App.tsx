@@ -314,7 +314,7 @@ export default function App(): React.ReactElement {
   const setExerciseEquipmentMode = (ex: Exercise, nextMode: EquipmentMode) => {
     setExModeOverrides((prev) => ({ ...prev, [ex.id]: nextMode }));
     const nextConfigs = CONFIG_CACHE[nextMode] || CONFIG_CACHE.pair;
-    const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
+    const effectiveSets = ex.sets;
     const updated: ActiveDraft = {
       ...activeDraft,
       [`__mode_${ex.id}`]: { mode: nextMode },
@@ -361,7 +361,7 @@ export default function App(): React.ReactElement {
 
   // Apply chosen supported weight to all uncompleted sets of this exercise (or all sets if all done)
   const selectWeightForExercise = (ex: Exercise, exactWeight: number) => {
-    const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
+    const effectiveSets = ex.sets;
     const updated: ActiveDraft = { ...activeDraft };
     let changedAny = false;
     for (let s = 1; s <= effectiveSets; s++) {
@@ -438,11 +438,6 @@ export default function App(): React.ReactElement {
         (a, b) => (a.orderB ?? 999) - (b.orderB ?? 999)
       );
     }
-    if (currentTab === 'express') {
-      return EXERCISES.filter((e) => e.workouts.includes('express')).sort(
-        (a, b) => (a.orderExpress ?? 999) - (b.orderExpress ?? 999)
-      );
-    }
     if (currentTab === 'all') {
       return muscleFilter === 'all'
         ? EXERCISES
@@ -455,7 +450,7 @@ export default function App(): React.ReactElement {
     let doneCount = 0;
     let totalCount = 0;
     visibleExercises.forEach((ex) => {
-      const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
+      const effectiveSets = ex.sets;
       totalCount += effectiveSets;
       for (let s = 1; s <= effectiveSets; s++) {
         if (getSetEntry(ex, s).done) doneCount++;
@@ -469,7 +464,7 @@ export default function App(): React.ReactElement {
     let sessionTotalSets = 0;
 
     visibleExercises.forEach((ex) => {
-      const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
+      const effectiveSets = ex.sets;
       const doneSets: LoggedSet[] = [];
       for (let s = 1; s <= effectiveSets; s++) {
         const entry = getSetEntry(ex, s);
@@ -509,7 +504,7 @@ export default function App(): React.ReactElement {
       minute: '2-digit',
     });
 
-    const allowedTabs: WorkoutTabKey[] = ['workoutA', 'workoutB', 'express', 'all'];
+    const allowedTabs: WorkoutTabKey[] = ['workoutA', 'workoutB', 'all'];
     const workoutTab = allowedTabs.includes(currentTab) ? currentTab : 'workoutA';
 
     const sessionDoc: WorkoutSession = {
@@ -677,7 +672,6 @@ export default function App(): React.ReactElement {
   const navTabs: { key: WorkoutTabKey; label: string; badge?: number }[] = [
     { key: 'workoutA', label: 'אימון בית 1: חזה, גב וזרועות' },
     { key: 'workoutB', label: 'אימון בית 2: כתפיים, גב וזרועות' },
-    { key: 'express', label: '⚡ אימון קצר (20 דקות)' },
     { key: 'progress', label: '📈 ההתקדמות שלי', badge: sortedHistoryDesc.length },
     { key: 'all', label: 'כל התרגילים' },
     { key: 'calculator', label: '🔩 מחשבון פלטות' },
@@ -687,7 +681,7 @@ export default function App(): React.ReactElement {
   const safeExIdx =
     visibleExercises.length > 0 ? Math.min(currentExerciseIdx, visibleExercises.length - 1) : 0;
   const activeEx = isWorkoutTab ? visibleExercises[safeExIdx] || null : null;
-  const activeEffectiveSets = activeEx ? (currentTab === 'express' ? 3 : activeEx.sets) : 0;
+  const activeEffectiveSets = activeEx ? activeEx.sets : 0;
   const safeSetIdx =
     activeEffectiveSets > 0 ? Math.max(0, Math.min(activeEffectiveSets - 1, currentSetIdx)) : 0;
   const activeSetNum = safeSetIdx + 1;
@@ -696,7 +690,7 @@ export default function App(): React.ReactElement {
     if (visibleExercises.length === 0) return;
     const clamped = Math.max(0, Math.min(visibleExercises.length - 1, nextIdx));
     const targetEx = visibleExercises[clamped];
-    const targetSets = currentTab === 'express' ? 3 : targetEx.sets;
+    const targetSets = targetEx.sets;
     const clampedSet = Math.max(0, Math.min(targetSets - 1, setIdxOverride));
     setCurrentExerciseIdx(clamped);
     setCurrentSetIdx(clampedSet);
@@ -709,7 +703,7 @@ export default function App(): React.ReactElement {
       setMobilePane('set');
     } else if (safeExIdx > 0) {
       const prevEx = visibleExercises[safeExIdx - 1];
-      const prevSets = currentTab === 'express' ? 3 : prevEx.sets;
+      const prevSets = prevEx.sets;
       goToExercise(safeExIdx - 1, prevSets - 1);
     }
   };
@@ -739,13 +733,13 @@ export default function App(): React.ReactElement {
     : 'תרגיל הבא ←';
 
   const currentSetupMessage =
-    currentTab === 'workoutA' || currentTab === 'workoutB' || currentTab === 'express'
+    currentTab === 'workoutA' || currentTab === 'workoutB'
       ? SETUP_MESSAGES[currentTab]
       : undefined;
 
   // Helper returning completion ratio for an exercise dot/pill
   const getExerciseDoneStats = (ex: Exercise) => {
-    const effectiveSets = currentTab === 'express' ? 3 : ex.sets;
+    const effectiveSets = ex.sets;
     let doneCount = 0;
     let bestWeightToday = 0;
     for (let s = 1; s <= effectiveSets; s++) {

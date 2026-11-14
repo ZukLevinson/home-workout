@@ -46,7 +46,7 @@ export const WEEKLY_SCHEDULE: WeeklyScheduleDay[] = [
   { day: 'שבת', label: 'מנוחה', highlight: 'card' },
 ];
 
-export const SETUP_MESSAGES: Record<'workoutA' | 'workoutB' | 'express', SetupMessage> = {
+export const SETUP_MESSAGES: Record<'workoutA' | 'workoutB', SetupMessage> = {
   workoutA: {
     title: '🔧 אימון בית 1: חזה, גב וזרועות (בערך 40 דקות)',
     desc: 'בחר בכל תרגיל משקל מתוך המשקלים האפשריים בערכה שלך (כולל הוראות הרכבת פלטות אוטומטיות) וסמן "בוצע". בסיום שמור ביומן!',
@@ -55,16 +55,11 @@ export const SETUP_MESSAGES: Record<'workoutA' | 'workoutB' | 'express', SetupMe
     title: '🔧 אימון בית 2: כתפיים, גב וזרועות (בערך 40 דקות)',
     desc: 'המשקלים שהרמת בפעם הקודמת מופיעים לך אוטומטית בכל תרגיל ומותאמים רק לפלטות שבבית. לחץ + כדי לעלות למדרגת המשקל האפשרית הבאה!',
   },
-  express: {
-    title: '⚡ אימון קצר של 20 דקות – פתרון מעולה לשבוע עמוס',
-    desc: '3 סטים מכל אחד מ-4 התרגילים שלמטה עם דקה מנוחה ביניהם, ושמירה ביומן בסיום.',
-  },
 };
 
 export const WORKOUT_NAMES_MAP: Record<string, string> = {
   workoutA: 'אימון בית 1: חזה, גב וזרועות',
   workoutB: 'אימון בית 2: כתפיים, גב וזרועות',
-  express: 'אימון קצר (20 דקות)',
 };
 
 export const MUSCLE_FILTERS: string[] = [
@@ -79,9 +74,8 @@ export const MUSCLE_FILTERS: string[] = [
 export const EXERCISES: Exercise[] = [
   {
     id: 'ex1',
-    workouts: ['workoutA', 'express'],
+    workouts: ['workoutA'],
     orderA: 1,
-    orderExpress: 1,
     name: 'לחיצת חזה בשכיבה על הרצפה',
     muscle: 'חזה',
     secondaryMuscles: 'יד אחורית (מאחורי הזרוע) וכתפיים',
@@ -110,9 +104,8 @@ export const EXERCISES: Exercise[] = [
   },
   {
     id: 'ex2',
-    workouts: ['workoutA', 'express'],
+    workouts: ['workoutA'],
     orderA: 2,
-    orderExpress: 2,
     name: 'משיכת משקולת ביד אחת בהישענות על הספסל (חתירה לגב)',
     muscle: 'גב',
     secondaryMuscles: 'צידי הגב, גב אמצעי ויד קדמית',
@@ -227,9 +220,8 @@ export const EXERCISES: Exercise[] = [
   },
   {
     id: 'ex6',
-    workouts: ['workoutB', 'express'],
+    workouts: ['workoutB'],
     orderB: 1,
-    orderExpress: 3,
     name: 'לחיצת כתפיים מעל הראש בכריעת ברך',
     muscle: 'כתפיים',
     secondaryMuscles: 'כתפיים, יד אחורית ושרירי הבטן',
@@ -315,9 +307,8 @@ export const EXERCISES: Exercise[] = [
   },
   {
     id: 'ex9',
-    workouts: ['workoutB', 'express'],
+    workouts: ['workoutB'],
     orderB: 4,
-    orderExpress: 4,
     name: 'צמד תרגילים ברצף לכתפיים: הרמה לצדדים + הרמה בהטיה קדימה',
     muscle: 'כתפיים',
     secondaryMuscles: 'צידי הכתפיים והחלק האחורי של הכתף',
