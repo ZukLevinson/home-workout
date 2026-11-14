@@ -1032,31 +1032,27 @@ export default function App(): React.ReactElement {
                   <Badge size="sm" color="brand">
                     מאמן כוח חכם
                   </Badge>
-                  <BadgeWithDot
-                    size="sm"
-                    color={
-                      syncStatus.mode === 'cloud'
-                        ? 'success'
-                        : syncStatus.mode === 'connecting'
-                        ? 'brand'
-                        : 'gray'
-                    }
-                  >
-                    {syncStatus.message}
-                  </BadgeWithDot>
+                  {syncStatus.mode !== 'cloud' && (
+                    <BadgeWithDot
+                      size="sm"
+                      color={syncStatus.mode === 'connecting' ? 'brand' : 'gray'}
+                    >
+                      {syncStatus.message}
+                    </BadgeWithDot>
+                  )}
                 </>
               ) : (
-                <span
-                  title={syncStatus.message}
-                  aria-label={syncStatus.message}
-                  className={`size-2 shrink-0 rounded-full ${
-                    syncStatus.mode === 'cloud'
-                      ? 'bg-fg-success-primary'
-                      : syncStatus.mode === 'connecting'
-                      ? 'bg-fg-brand-primary animate-pulse'
-                      : 'bg-fg-quaternary'
-                  }`}
-                />
+                syncStatus.mode !== 'cloud' && (
+                  <span
+                    title={syncStatus.message}
+                    aria-label={syncStatus.message}
+                    className={`size-2 shrink-0 rounded-full ${
+                      syncStatus.mode === 'connecting'
+                        ? 'bg-fg-brand-primary animate-pulse'
+                        : 'bg-fg-quaternary'
+                    }`}
+                  />
+                )
               )}
             </div>
 

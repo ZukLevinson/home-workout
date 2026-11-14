@@ -164,7 +164,9 @@ export function ProgressView({
               <FeaturedIcon icon={Calendar} size="sm" color="gray" theme="modern" />
               <div className="flex flex-col">
                 <h2 className="text-sm font-bold text-primary sm:text-md">יומן האימונים שלך</h2>
-                <p className="text-xs text-tertiary">{syncStatus.message}</p>
+                {syncStatus.mode !== 'cloud' && (
+                  <p className="text-xs text-tertiary">{syncStatus.message}</p>
+                )}
               </div>
             </div>
 
