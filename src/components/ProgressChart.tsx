@@ -153,7 +153,8 @@ export default function ProgressChart({
               x={c.x}
               y={c.y - 11}
               fontSize={12}
-              fontWeight="700"
+              fontFamily={fontForWeight('bold', fontsLoaded)}
+              fontWeight={fontsLoaded ? undefined : '700'}
               fill={colors.foreground}
               textAnchor="middle"
             >
@@ -163,6 +164,7 @@ export default function ProgressChart({
               x={c.x}
               y={H - 8}
               fontSize={12}
+              fontFamily={fontForWeight('regular', fontsLoaded)}
               fill={colors.foreground}
               opacity={0.65}
               textAnchor="middle"

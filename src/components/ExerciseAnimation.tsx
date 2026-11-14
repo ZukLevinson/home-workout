@@ -55,7 +55,8 @@ function DumbbellHorizontal({
 function computeFrame(
   animKey: string,
   ms: number,
-  colors: ThemeColors
+  colors: ThemeColors,
+  labelFont?: string
 ): { label: string; elements: React.ReactElement } {
   const fg = colors.foreground;
   const primary = colors.primary;
@@ -81,7 +82,7 @@ function computeFrame(
           <G>
             <Line x1={15} y1={140} x2={265} y2={140} stroke={fg} strokeOpacity={0.25} strokeWidth={2} />
             <Rect x={35} y={135} width={210} height={5} rx={2.5} fill={primary} fillOpacity={0.35} />
-            <SvgText x={140} y={156} fontSize={12} fill={fg} opacity={0.65} textAnchor="middle">
+            <SvgText x={140} y={156} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.65} textAnchor="middle">
               שכיבה על מזרן על הרצפה
             </SvgText>
             <Circle cx={70} cy={122} r={11} fill={fg} fillOpacity={0.82} />
@@ -138,13 +139,13 @@ function computeFrame(
           <G>
             <Line x1={15} y1={142} x2={265} y2={142} stroke={fg} strokeOpacity={0.25} strokeWidth={2} />
             <Line x1={40} y1={30} x2={40} y2={142} stroke={fg} strokeOpacity={0.3} strokeWidth={3} />
-            <SvgText x={56} y={44} fontSize={12} fill={fg} opacity={0.6} textAnchor="middle">
+            <SvgText x={56} y={44} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.6} textAnchor="middle">
               קיר
             </SvgText>
             <Rect x={42} y={103} width={66} height={7} rx={2} fill={fg} fillOpacity={0.65} />
             <Line x1={50} y1={110} x2={50} y2={142} stroke={fg} strokeWidth={5} strokeOpacity={0.65} />
             <Line x1={100} y1={110} x2={100} y2={142} stroke={fg} strokeWidth={5} strokeOpacity={0.65} />
-            <SvgText x={92} y={157} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={92} y={157} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               ספסל אימון צמוד לקיר
             </SvgText>
             <Circle cx={95} cy={64} r={10} fill={fg} fillOpacity={0.85} />
@@ -226,7 +227,7 @@ function computeFrame(
             <Rect x={182} y={103} width={60} height={7} rx={2} fill={fg} fillOpacity={0.65} />
             <Line x1={190} y1={110} x2={190} y2={142} stroke={fg} strokeWidth={5} strokeOpacity={0.65} />
             <Line x1={234} y1={110} x2={234} y2={142} stroke={fg} strokeWidth={5} strokeOpacity={0.65} />
-            <SvgText x={212} y={157} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={212} y={157} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               ספסל צמוד לקיר
             </SvgText>
             <Circle cx={headX} cy={headY} r={10} fill={fg} fillOpacity={0.85} />
@@ -273,7 +274,7 @@ function computeFrame(
           <G>
             <Line x1={15} y1={140} x2={265} y2={140} stroke={fg} strokeOpacity={0.25} strokeWidth={2} />
             <Rect x={40} y={135} width={200} height={5} rx={2.5} fill={primary} fillOpacity={0.35} />
-            <SvgText x={140} y={156} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={140} y={156} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               החלק העליון של הזרוע נשאר קבוע ולא זז!
             </SvgText>
             <Circle cx={82} cy={123} r={11} fill={fg} fillOpacity={0.82} />
@@ -335,7 +336,7 @@ function computeFrame(
               strokeWidth={3}
               strokeDasharray="5 4"
             />
-            <SvgText x={72} y={38} fontSize={12} fill={fg} opacity={0.6} textAnchor="middle">
+            <SvgText x={72} y={38} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.6} textAnchor="middle">
               קיר ליציבות
             </SvgText>
             <Circle cx={128} cy={36} r={10} fill={fg} fillOpacity={0.85} />
@@ -387,7 +388,7 @@ function computeFrame(
           <G>
             <Line x1={15} y1={146} x2={265} y2={146} stroke={fg} strokeOpacity={0.25} strokeWidth={2} />
             <Rect x={116} y={139} width={36} height={7} rx={3} fill={primary} fillOpacity={0.45} />
-            <SvgText x={140} y={161} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={140} y={161} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               כרית רכה מתחת לברך
             </SvgText>
             <Circle cx={134} cy={56} r={10} fill={fg} fillOpacity={0.85} />
@@ -451,7 +452,7 @@ function computeFrame(
         elements: (
           <G>
             <Line x1={15} y1={146} x2={265} y2={146} stroke={fg} strokeOpacity={0.25} strokeWidth={2} />
-            <SvgText x={140} y={161} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={140} y={161} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               פלג הגוף העליון נשאר יציב ולא מתרומם
             </SvgText>
             <Circle cx={96} cy={54} r={10} fill={fg} fillOpacity={0.85} />
@@ -514,7 +515,7 @@ function computeFrame(
           <G>
             <Line x1={20} y1={138} x2={260} y2={138} stroke={fg} strokeOpacity={0.25} strokeWidth={2} />
             <Rect x={45} y={133} width={190} height={5} rx={2.5} fill={primary} fillOpacity={0.35} />
-            <SvgText x={140} y={156} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={140} y={156} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               מבט מלפנים – מרפקים תמיד מעט כפופים
             </SvgText>
             <Rect x={114} y={112} width={52} height={21} rx={9} fill={fg} fillOpacity={0.82} />
@@ -607,7 +608,7 @@ function computeFrame(
             <Circle cx={wlx} cy={wly} r={3} fill={card} />
             <Circle cx={wrx} cy={wry} r={9.5} fill={primary} />
             <Circle cx={wrx} cy={wry} r={3} fill={card} />
-            <SvgText x={140} y={160} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={140} y={160} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               תרגיל 1 בצמד: בעמידה זקופה (הרמה לצדדים)
             </SvgText>
           </G>
@@ -663,7 +664,7 @@ function computeFrame(
             />
             <Circle cx={wx} cy={wy} r={9.5} fill={primary} />
             <Circle cx={wx} cy={wy} r={3} fill={card} />
-            <SvgText x={140} y={161} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={140} y={161} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               תרגיל 2 בצמד: בהטיה קדימה (לחלק האחורי של הכתף)
             </SvgText>
           </G>
@@ -717,7 +718,7 @@ function computeFrame(
             <Rect x={wx - 3} y={wy - 12} width={6} height={24} rx={2} fill={fg} />
             <Rect x={wx - 7} y={wy - 10} width={14} height={5} rx={1.5} fill={primary} />
             <Rect x={wx - 7} y={wy + 5} width={14} height={5} rx={1.5} fill={primary} />
-            <SvgText x={140} y={160} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={140} y={160} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               תרגיל 1 בצמד: כפיפת מרפקים בעמידה
             </SvgText>
           </G>
@@ -776,7 +777,7 @@ function computeFrame(
               strokeLinecap="round"
               strokeLinejoin="round"
             />
-            <SvgText x={140} y={158} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
+            <SvgText x={140} y={158} fontFamily={labelFont} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
               תרגיל 2 בצמד: דחיפה אחורית על ספסל צמוד לקיר
             </SvgText>
           </G>
@@ -819,7 +820,8 @@ export default function ExerciseAnimation({
   }, [paused]);
 
   const activeKey = exercise.animKeys[subIdx] || exercise.animKeys[0];
-  const frame = computeFrame(activeKey, nowMs, colors);
+  const labelFont = fontForWeight('medium', fontsLoaded);
+  const frame = computeFrame(activeKey, nowMs, colors, labelFont);
   const animLabels = exercise.animLabels || [];
 
   return (

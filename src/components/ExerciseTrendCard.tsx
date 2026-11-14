@@ -311,7 +311,8 @@ export default function ExerciseTrendCard({
                     x={p.x}
                     y={p.y - 9}
                     fontSize={11}
-                    fontWeight="700"
+                    fontFamily={fBold}
+                    fontWeight={fontsLoaded ? undefined : '700'}
                     fill={colors.foreground}
                     textAnchor="middle"
                   >
@@ -321,6 +322,7 @@ export default function ExerciseTrendCard({
                     x={p.x}
                     y={H - 5}
                     fontSize={10}
+                    fontFamily={fReg}
                     fill={colors.foreground}
                     opacity={0.65}
                     textAnchor="middle"

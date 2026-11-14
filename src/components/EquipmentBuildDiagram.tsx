@@ -89,6 +89,8 @@ interface RenderLoadedBarParams {
   phaseMs: number;
   colors: ThemeColors;
   keyPrefix: string;
+  boldFont?: string;
+  fontsLoaded: boolean;
 }
 
 /**
@@ -107,6 +109,8 @@ function renderLoadedBar({
   phaseMs,
   colors,
   keyPrefix,
+  boldFont,
+  fontsLoaded,
 }: RenderLoadedBarParams): React.ReactElement[] {
   // Active assembly happens in first 1500ms of each 4800ms cycle
   const cycleMs = phaseMs % 4800;
@@ -255,7 +259,8 @@ function renderLoadedBar({
               x={px + dir * (rx * 0.36)}
               y={barY + 3.5 * scale}
               fontSize={Math.max(9.5, 11 * scale)}
-              fontWeight="800"
+              fontFamily={boldFont}
+              fontWeight={fontsLoaded ? undefined : '700'}
               fill="#ffffff"
               textAnchor="middle"
             >
@@ -286,7 +291,8 @@ function renderLoadedBar({
             x={px}
             y={tagY + 2.8}
             fontSize={9.5}
-            fontWeight="700"
+            fontFamily={boldFont}
+            fontWeight={fontsLoaded ? undefined : '700'}
             fill="#ffffff"
             textAnchor="middle"
           >
@@ -408,6 +414,10 @@ export default function EquipmentBuildDiagram({
         : `איור ציוד: תוספת פלטה של ${cfg.totalWeight} קילוגרם`;
   }
 
+  const fReg = fontForWeight('regular', fontsLoaded);
+  const fMed = fontForWeight('medium', fontsLoaded);
+  const fBold = fontForWeight('bold', fontsLoaded);
+
   const handleReplay = () => {
     startRef.current = Date.now();
     setPhaseMs(0);
@@ -495,6 +505,8 @@ export default function EquipmentBuildDiagram({
                 phaseMs,
                 colors,
                 keyPrefix: mode === 'pair' ? 'pair-single' : 'single',
+                boldFont: fBold,
+                fontsLoaded,
               })}
             </G>
           )}
@@ -513,6 +525,8 @@ export default function EquipmentBuildDiagram({
                 phaseMs,
                 colors,
                 keyPrefix: 'bb',
+                boldFont: fBold,
+                fontsLoaded,
               })}
             </G>
           )}
@@ -559,7 +573,8 @@ export default function EquipmentBuildDiagram({
                       x={cx}
                       y={liftY - r * 0.38}
                       fontSize={13}
-                      fontWeight="800"
+                      fontFamily={fBold}
+                      fontWeight={fontsLoaded ? undefined : '700'}
                       fill="#ffffff"
                       textAnchor="middle"
                     >
@@ -569,7 +584,8 @@ export default function EquipmentBuildDiagram({
                       x={cx}
                       y={liftY + r * 0.56}
                       fontSize={10}
-                      fontWeight="600"
+                      fontFamily={fMed}
+                      fontWeight={fontsLoaded ? undefined : '600'}
                       fill="#ffffff"
                       fillOpacity={0.85}
                       textAnchor="middle"
@@ -598,7 +614,8 @@ export default function EquipmentBuildDiagram({
                 x={140}
                 y={57}
                 fontSize={13}
-                fontWeight="700"
+                fontFamily={fBold}
+                fontWeight={fontsLoaded ? undefined : '700'}
                 fill={colors.foreground}
                 textAnchor="middle"
               >
@@ -608,6 +625,7 @@ export default function EquipmentBuildDiagram({
                 x={140}
                 y={76}
                 fontSize={11}
+                fontFamily={fReg}
                 fill={colors.mutedForeground}
                 textAnchor="middle"
               >
@@ -630,7 +648,8 @@ export default function EquipmentBuildDiagram({
                 x={25}
                 y={21}
                 fontSize={12}
-                fontWeight="800"
+                fontFamily={fBold}
+                fontWeight={fontsLoaded ? undefined : '700'}
                 fill={colors.primaryForeground}
                 textAnchor="middle"
               >
