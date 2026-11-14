@@ -107,8 +107,8 @@ export default function App(): React.ReactElement {
   const [lastNonProgressTab, setLastNonProgressTab] = useState<WorkoutTabKey>('workoutA');
   const [currentExerciseIdx, setCurrentExerciseIdx] = useState<number>(0);
   const [currentSetIdx, setCurrentSetIdx] = useState<number>(0);
-  const [mobilePane, setMobilePane] = useState<'set' | 'demo' | 'trend'>('set');
-  const [infoSubPane, setInfoSubPane] = useState<'demo' | 'steps'>('demo');
+  const [mobilePane, setMobilePane] = useState<'set' | 'trend'>('set');
+  const [exerciseStepsModalOpen, setExerciseStepsModalOpen] = useState<boolean>(false);
   const [guideModalOpen, setGuideModalOpen] = useState<boolean>(false);
   const [exerciseDropdownOpen, setExerciseDropdownOpen] = useState<boolean>(false);
   const [weightsModalOpen, setWeightsModalOpen] = useState<boolean>(false);
@@ -684,6 +684,7 @@ export default function App(): React.ReactElement {
     setSaveFeedback(null);
     setExerciseDropdownOpen(false);
     setWeightsModalOpen(false);
+    setExerciseStepsModalOpen(false);
     if (nextTab !== 'progress') {
       setLastNonProgressTab(nextTab);
     }
@@ -715,6 +716,7 @@ export default function App(): React.ReactElement {
     const targetSets = targetEx.sets;
     const clampedSet = Math.max(0, Math.min(targetSets - 1, setIdxOverride));
     setWeightsModalOpen(false);
+    setExerciseStepsModalOpen(false);
     setCurrentExerciseIdx(clamped);
     setCurrentSetIdx(clampedSet);
     setMobilePane('set');
@@ -1543,157 +1545,99 @@ export default function App(): React.ReactElement {
                       {describeConfigSetup(setCfg, effectiveMode)}
                     </Text>
                   </View>
+
+                  {!isWide && (
+                    <View style={styles.infoQuickStrip}>
+                      <Pressable
+                        onPress={() => setExerciseStepsModalOpen(true)}
+                        style={[
+                          styles.stepsModalTriggerBtn,
+                          { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.smallBtnText,
+                            { color: colors.primary, fontFamily: fBold },
+                          ]}
+                        >
+                          📋 שלבים וטיפים ({ex.steps.length})
+                        </Text>
+                      </Pressable>
+
+                      {ex.videos.map((v, vIdx) => (
+                        <Pressable
+                          key={v.url}
+                          onPress={() => Linking.openURL(v.url)}
+                          style={[
+                            styles.videoQuickChip,
+                            { backgroundColor: colors.secondary, borderColor: colors.border },
+                          ]}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.smallBtnText,
+                              { color: colors.secondaryForeground, fontFamily: fSemi },
+                            ]}
+                          >
+                            🎬 {ex.videos.length > 1 ? `סרטון ${vIdx + 1}` : 'סרטון הדגמה'} ↗
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </View>
               );
 
               const renderExerciseGuidancePane = () => (
                 <View style={styles.guidancePane}>
-                  {/* Sub-toggle between Movement Animation+Videos and Step-by-Step+Safety */}
-                  <View style={styles.guidanceToggleRow}>
-                    {(
-                      [
-                        { id: 'demo', label: '🎬 הדגמה וסרטונים' },
-                        { id: 'steps', label: '📋 שלבי ביצוע וטיפים' },
-                      ] as { id: 'demo' | 'steps'; label: string }[]
-                    ).map((paneOpt) => {
-                      const active = infoSubPane === paneOpt.id;
-                      return (
+                  <View style={styles.guidanceContentCol}>
+                    <ExerciseAnimation
+                      compact
+                      exercise={ex}
+                      paused={animPaused}
+                      colors={colors}
+                      fontsLoaded={fontsLoaded}
+                    />
+                    <View style={styles.videosRow}>
+                      <Pressable
+                        onPress={() => setExerciseStepsModalOpen(true)}
+                        style={[
+                          styles.videoBtnCompact,
+                          { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.smallBtnText, { color: colors.primary, fontFamily: fBold }]}
+                        >
+                          📋 שלבי ביצוע וטיפים ({ex.steps.length})
+                        </Text>
+                      </Pressable>
+                      {ex.videos.map((v) => (
                         <Pressable
-                          key={paneOpt.id}
-                          onPress={() => setInfoSubPane(paneOpt.id)}
+                          key={v.url}
+                          onPress={() => Linking.openURL(v.url)}
                           style={[
-                            styles.guidanceToggleBtn,
-                            {
-                              backgroundColor: active ? colors.primary : colors.background,
-                              borderColor: active ? colors.primary : colors.border,
-                            },
+                            styles.videoBtnCompact,
+                            { backgroundColor: colors.secondary, borderColor: colors.border },
                           ]}
                         >
                           <Text
+                            numberOfLines={1}
                             style={[
                               styles.smallBtnText,
-                              {
-                                color: active ? colors.primaryForeground : colors.foreground,
-                                fontFamily: fSemi,
-                              },
+                              { color: colors.secondaryForeground, fontFamily: fSemi },
                             ]}
                           >
-                            {paneOpt.label}
+                            🎬 {v.label} ↗
                           </Text>
                         </Pressable>
-                      );
-                    })}
+                      ))}
+                    </View>
                   </View>
-
-                  {infoSubPane === 'demo' ? (
-                    <View style={styles.guidanceContentCol}>
-                      <ExerciseAnimation
-                        compact
-                        exercise={ex}
-                        paused={animPaused}
-                        colors={colors}
-                        fontsLoaded={fontsLoaded}
-                      />
-                      <View style={styles.videosRow}>
-                        {ex.videos.map((v) => (
-                          <Pressable
-                            key={v.url}
-                            onPress={() => Linking.openURL(v.url)}
-                            style={[
-                              styles.videoBtnCompact,
-                              { backgroundColor: colors.secondary, borderColor: colors.border },
-                            ]}
-                          >
-                            <Text
-                              numberOfLines={1}
-                              style={[
-                                styles.smallBtnText,
-                                { color: colors.secondaryForeground, fontFamily: fSemi },
-                              ]}
-                            >
-                              🎬 {v.label} ↗
-                            </Text>
-                          </Pressable>
-                        ))}
-                      </View>
-                    </View>
-                  ) : (
-                    <View
-                      style={[
-                        styles.stepsFitCard,
-                        { backgroundColor: colors.background, borderColor: colors.border },
-                      ]}
-                    >
-                      <View style={{ gap: 6 }}>
-                        {ex.steps.map((st, sIdx) => (
-                          <View key={sIdx} style={styles.stepRow}>
-                            <View
-                              style={[
-                                styles.stepNumCircle,
-                                { backgroundColor: colors.secondary },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.stepNumText,
-                                  { color: colors.secondaryForeground, fontFamily: fBold },
-                                ]}
-                              >
-                                {sIdx + 1}
-                              </Text>
-                            </View>
-                            <Text
-                              style={[
-                                styles.stepBodyTextCompact,
-                                { color: colors.foreground, fontFamily: fReg },
-                              ]}
-                            >
-                              {st}
-                            </Text>
-                          </View>
-                        ))}
-                      </View>
-
-                      <View style={styles.tipsFooterRow}>
-                        <View
-                          style={[
-                            styles.tipCompactBox,
-                            { backgroundColor: colors.card, borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.subCardText,
-                              { color: colors.mutedForeground, fontFamily: fReg },
-                            ]}
-                          >
-                            <Text style={{ color: colors.success, fontFamily: fBold }}>
-                              💡 למה זה טוב:{' '}
-                            </Text>
-                            {ex.homeTip}
-                          </Text>
-                        </View>
-                        <View
-                          style={[
-                            styles.tipCompactBox,
-                            { backgroundColor: colors.card, borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.subCardText,
-                              { color: colors.mutedForeground, fontFamily: fReg },
-                            ]}
-                          >
-                            <Text style={{ color: colors.danger, fontFamily: fBold }}>
-                              ⚠️ ממה להיזהר:{' '}
-                            </Text>
-                            {ex.avoid}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  )}
                 </View>
               );
 
@@ -1750,10 +1694,31 @@ export default function App(): React.ReactElement {
                       </View>
                     </View>
 
-                    <View style={[styles.pillBadge, { backgroundColor: colors.primarySoft }]}>
-                      <Text style={[styles.pillBadgeText, { color: colors.primary, fontFamily: fBold }]}>
-                        סט {setNum} מתוך {effectiveSets}
-                      </Text>
+                    <View style={styles.headerBadgesCol}>
+                      <View style={[styles.pillBadge, { backgroundColor: colors.primarySoft }]}>
+                        <Text style={[styles.pillBadgeText, { color: colors.primary, fontFamily: fBold }]}>
+                          סט {setNum} מתוך {effectiveSets}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => startTimer(ex.restSec)}
+                        style={[
+                          styles.restTagBadge,
+                          {
+                            backgroundColor: scheme === 'dark' ? '#422006' : '#fef3c7',
+                            borderColor: scheme === 'dark' ? '#f59e0b' : '#d97706',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.restTagText,
+                            { color: scheme === 'dark' ? '#fbbf24' : '#b45309', fontFamily: fBold },
+                          ]}
+                        >
+                          ⏳ מנוחה: {ex.restSec} שניות
+                        </Text>
+                      </Pressable>
                     </View>
                   </View>
 
@@ -1775,7 +1740,7 @@ export default function App(): React.ReactElement {
                     </>
                   ) : (
                     <>
-                      {/* Mobile Compact: 1-Line Clickable Trend Strip + 3-Tab Switcher + Active Pane */}
+                      {/* Mobile Compact: 1-Line Clickable Trend Strip + 2-Tab Switcher + Active Pane */}
                       <Pressable
                         onPress={() => setMobilePane('trend')}
                         style={[
@@ -1797,10 +1762,9 @@ export default function App(): React.ReactElement {
                       <View style={styles.mobilePaneTabsRow}>
                         {(
                           [
-                            { id: 'set', label: `🏋️ סט ${setNum} ואנימציה` },
-                            { id: 'demo', label: '📋 שלבים וסרטונים' },
+                            { id: 'set', label: '🏋️ התרגיל' },
                             { id: 'trend', label: '📈 מגמה וסטים' },
-                          ] as { id: 'set' | 'demo' | 'trend'; label: string }[]
+                          ] as { id: 'set' | 'trend'; label: string }[]
                         ).map((tabItem) => {
                           const active = mobilePane === tabItem.id;
                           return (
@@ -1834,7 +1798,6 @@ export default function App(): React.ReactElement {
 
                       <View style={styles.flexOne}>
                         {mobilePane === 'set' && renderSingleSetWorkspace()}
-                        {mobilePane === 'demo' && renderExerciseGuidancePane()}
                         {mobilePane === 'trend' && (
                           <View style={styles.mobileTrendPaneWrap}>
                             <ExerciseTrendCard
@@ -3192,6 +3155,212 @@ export default function App(): React.ReactElement {
         </Pressable>
       </Modal>
 
+      {/* EXERCISE STEPS, TEMPO, VIDEOS & SAFETY MODAL */}
+      <Modal
+        visible={exerciseStepsModalOpen && !!activeEx}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setExerciseStepsModalOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setExerciseStepsModalOpen(false)}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={[
+              styles.modalCard,
+              styles.dropdownListModal,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            {activeEx && (
+              <>
+                <View
+                  style={[
+                    styles.rowBetween,
+                    { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 },
+                  ]}
+                >
+                  <View style={styles.exerciseDropdownRight}>
+                    <ExerciseGifIcon
+                      exerciseId={activeEx.id}
+                      size={44}
+                      active
+                      borderColor={colors.border}
+                      activeBorderColor="#a3e635"
+                    />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text
+                        numberOfLines={2}
+                        style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}
+                      >
+                        {activeEx.name}
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.exMetaCompact,
+                          { color: colors.mutedForeground, fontFamily: fReg },
+                        ]}
+                      >
+                        {activeEx.muscle} • {activeEx.equipment}
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    onPress={() => setExerciseStepsModalOpen(false)}
+                    style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
+                  >
+                    <Text
+                      style={[
+                        styles.smallBtnText,
+                        { color: colors.secondaryForeground, fontFamily: fBold },
+                      ]}
+                    >
+                      סגור ✕
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <ScrollView contentContainerStyle={{ gap: 10, paddingVertical: 6 }}>
+                  <View style={styles.tipsFooterRow}>
+                    <View
+                      style={[
+                        styles.tipCompactBox,
+                        { backgroundColor: colors.background, borderColor: colors.border },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.subCardText,
+                          { color: colors.mutedForeground, fontFamily: fReg },
+                        ]}
+                      >
+                        <Text style={{ color: colors.foreground, fontFamily: fBold }}>
+                          ⏱ קצב תנועה:{' '}
+                        </Text>
+                        {activeEx.tempo}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.tipCompactBox,
+                        {
+                          backgroundColor: scheme === 'dark' ? '#422006' : '#fef3c7',
+                          borderColor: scheme === 'dark' ? '#f59e0b' : '#d97706',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.subCardText,
+                          { color: scheme === 'dark' ? '#fbbf24' : '#b45309', fontFamily: fBold },
+                        ]}
+                      >
+                        ⏳ מנוחה בין סט לסט: {activeEx.restSec} שניות
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.subCard,
+                      { backgroundColor: colors.background, borderColor: colors.border, gap: 8 },
+                    ]}
+                  >
+                    <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                      📋 שלבי ביצוע:
+                    </Text>
+                    {activeEx.steps.map((st, sIdx) => (
+                      <View key={sIdx} style={styles.stepRow}>
+                        <View style={[styles.stepNumCircle, { backgroundColor: colors.secondary }]}>
+                          <Text
+                            style={[
+                              styles.stepNumText,
+                              { color: colors.secondaryForeground, fontFamily: fBold },
+                            ]}
+                          >
+                            {sIdx + 1}
+                          </Text>
+                        </View>
+                        <Text
+                          style={[
+                            styles.stepBodyTextCompact,
+                            { color: colors.foreground, fontFamily: fReg },
+                          ]}
+                        >
+                          {st}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={styles.tipsFooterRow}>
+                    <View
+                      style={[
+                        styles.tipCompactBox,
+                        { backgroundColor: colors.background, borderColor: colors.border },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.subCardText,
+                          { color: colors.mutedForeground, fontFamily: fReg },
+                        ]}
+                      >
+                        <Text style={{ color: colors.success, fontFamily: fBold }}>
+                          💡 למה זה טוב:{' '}
+                        </Text>
+                        {activeEx.homeTip}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.tipCompactBox,
+                        { backgroundColor: colors.background, borderColor: colors.border },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.subCardText,
+                          { color: colors.mutedForeground, fontFamily: fReg },
+                        ]}
+                      >
+                        <Text style={{ color: colors.danger, fontFamily: fBold }}>
+                          ⚠️ ממה להיזהר:{' '}
+                        </Text>
+                        {activeEx.avoid}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.videosRow}>
+                    {activeEx.videos.map((v) => (
+                      <Pressable
+                        key={v.url}
+                        onPress={() => Linking.openURL(v.url)}
+                        style={[
+                          styles.videoBtnCompact,
+                          { backgroundColor: colors.secondary, borderColor: colors.border },
+                        ]}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.smallBtnText,
+                            { color: colors.secondaryForeground, fontFamily: fSemi },
+                          ]}
+                        >
+                          🎬 {v.label} ↗
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </ScrollView>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* GUIDE, EQUIPMENT INVENTORY & SAFETY MODAL */}
       <Modal
         visible={guideModalOpen}
@@ -3213,7 +3382,7 @@ export default function App(): React.ReactElement {
               ]}
             >
               <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                📖 מדריך, ציוד ביתי ולוח שבועי
+                📖 מדריך, ציוד ולוח שבועי
               </Text>
               {(timerRunning || timerFinished) && (
                 <View style={[styles.compactSyncBadge, { backgroundColor: colors.primarySoft }]}>
@@ -4427,5 +4596,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 10,
+  },
+  headerBadgesCol: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  restTagBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  restTagText: {
+    fontSize: 11,
+    writingDirection: 'rtl',
+  },
+  infoQuickStrip: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  stepsModalTriggerBtn: {
+    flexGrow: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  videoQuickChip: {
+    flexGrow: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
