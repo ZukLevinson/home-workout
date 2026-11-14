@@ -9,7 +9,7 @@
     "providers": {
       "anonymous": true,
       "googleSignIn": {
-        "oAuthBrandDisplayName": "Home Workout",
+        "oAuthBrandDisplayName": "AI Trainer",
         "supportEmail": "zuklevinson@gmail.com"
       }
     }

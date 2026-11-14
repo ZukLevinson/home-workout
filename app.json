@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "אימון פלג גוף עליון",
-    "slug": "home-workout-rn",
+    "name": "AI Trainer",
+    "slug": "ai-trainer",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

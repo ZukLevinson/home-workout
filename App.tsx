@@ -154,7 +154,7 @@ export default function App(): React.ReactElement {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.lang = 'he';
       document.documentElement.dir = 'rtl';
-      document.title = 'תכנית אימונים ביתית – הדגמות ומעקב התקדמות';
+      document.title = 'AI Trainer';
     }
   }, []);
 
@@ -516,7 +516,7 @@ export default function App(): React.ReactElement {
       createdAtMs: nowMs,
       displayDate,
       workoutTab,
-      workoutTitle: WORKOUT_NAMES_MAP[workoutTab] || 'אימון ביתי',
+      workoutTitle: WORKOUT_NAMES_MAP[workoutTab] || 'אימון כוח',
       note: workoutNote.trim().slice(0, 500),
       totalSets: sessionTotalSets,
       items,
@@ -570,7 +570,7 @@ export default function App(): React.ReactElement {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'home-workout-progress-backup.json';
+      a.download = 'ai-trainer-progress-backup.json';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -673,8 +673,8 @@ export default function App(): React.ReactElement {
   const fBold = fontForWeight('bold', fontsLoaded);
 
   const navTabs: { key: WorkoutTabKey; label: string }[] = [
-    { key: 'workoutA', label: 'אימון בית 1: חזה, גב וזרועות' },
-    { key: 'workoutB', label: 'אימון בית 2: כתפיים, גב וזרועות' },
+    { key: 'workoutA', label: 'אימון A: חזה, גב וזרועות' },
+    { key: 'workoutB', label: 'אימון B: כתפיים, גב וזרועות' },
     { key: 'all', label: 'כל התרגילים' },
     { key: 'calculator', label: '🔩 מחשבון פלטות' },
   ];
@@ -801,8 +801,15 @@ export default function App(): React.ReactElement {
               numberOfLines={1}
               style={[styles.compactTitle, { color: colors.foreground, fontFamily: fBold }]}
             >
-              🏋️ תכנית אימונים ביתית
+              🤖 AI Trainer
             </Text>
+            {isWide && (
+              <View style={[styles.compactSyncBadge, { backgroundColor: colors.primarySoft }]}>
+                <Text style={[styles.compactSyncText, { color: colors.primary, fontFamily: fSemi }]}>
+                  מאמן כוח חכם
+                </Text>
+              </View>
+            )}
             <View
               style={[
                 styles.compactSyncBadge,
@@ -2281,12 +2288,12 @@ export default function App(): React.ReactElement {
             {currentTab === 'calculator' && activeCalcCfg && (
               <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  מחשבון הרכבת פלטות – מותאם בדיוק לארגז המשקולות שלך
+                  מחשבון הרכבת פלטות חכם – AI Trainer
                 </Text>
                 <Text
                   style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}
                 >
-                  מה שיש לך בארגז: 4 פלטות של 5 קילוגרם, 4 פלטות של 2.5 קילוגרם, 6 פלטות של 1.25 קילוגרם, ו-6 פלטות של 0.5 קילוגרם. בחר איזה מוט אתה מרכיב ולאיזה משקל תרצה להגיע, והמחשבון יראה לך אילו פלטות לשים בכל צד.
+                  סט הפלטות המוגדר במערכת: 4 פלטות של 5 קילוגרם, 4 פלטות של 2.5 קילוגרם, 6 פלטות של 1.25 קילוגרם, ו-6 פלטות של 0.5 קילוגרם. בחרו את סוג המוט ואת משקל היעד, והמחשבון יציג אילו פלטות להרכיב בכל צד.
                 </Text>
 
                 <View style={[styles.statsGrid, isWide && styles.statsGridWide]}>
@@ -3207,7 +3214,7 @@ export default function App(): React.ReactElement {
                 ]}
               >
                 <Text style={[styles.inventoryTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  📦 תכולת ארגז המשקולות שלך (האתר מאפשר אך ורק משקלים שניתן להרכיב מהציוד הזה):
+                  📦 פרופיל הציוד והמשקלים הנתמכים ב-AI Trainer:
                 </Text>
                 <View style={styles.filterRow}>
                   {EQUIPMENT_SUMMARY_ITEMS.map((item) => (
@@ -3257,10 +3264,10 @@ export default function App(): React.ReactElement {
                 ]}
               >
                 <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  ⚠️ בטיחות עם ספסל איקאה STOREDAMM (עד 100 קילוגרם)
+                  ⚠️ בטיחות עבודה עם ספסל אימון (עד 100 קילוגרם)
                 </Text>
                 <Text style={[styles.subCardText, { color: colors.mutedForeground, fontFamily: fReg }]}>
-                  הספסל מוגבל ל-100 קילוגרם בסך הכל (משקל הגוף שלך + המשקולות יחד). לכן לא שוכבים או יושבים עליו עם משקולות, אלא רק נשענים עליו עם יד אחת או שמים עליו רגליים או ידיים כשהוא צמוד לקיר.
+                  כשמתאמנים עם ספסל בעל מגבלת עומס של עד 100 קילוגרם (משקל גוף + משקולות יחד), מומלץ שלא לשכב או לשבת עליו עם משקלים כבדים, אלא להישען עם יד אחת או להניח ידיים/רגליים כשהספסל צמוד לקיר.
                 </Text>
               </View>
 
@@ -3271,7 +3278,7 @@ export default function App(): React.ReactElement {
                 ]}
               >
                 <Text style={[styles.subCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
-                  🏋️ דוגמה לשילוב בשבוע עם 3 אימוני קרוספיט
+                  🏋️ דוגמה לשילוב שבועי מומלץ (כוח + אימונים פונקציונליים)
                 </Text>
                 <View style={styles.weekRow}>
                   {WEEKLY_SCHEDULE.map((d) => {

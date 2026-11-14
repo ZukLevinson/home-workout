@@ -145,7 +145,7 @@ function computeFrame(
             <Line x1={50} y1={110} x2={50} y2={142} stroke={fg} strokeWidth={5} strokeOpacity={0.65} />
             <Line x1={100} y1={110} x2={100} y2={142} stroke={fg} strokeWidth={5} strokeOpacity={0.65} />
             <SvgText x={92} y={157} fontSize={12} fill={fg} opacity={0.7} textAnchor="middle">
-              ספסל איקאה צמוד לקיר
+              ספסל אימון צמוד לקיר
             </SvgText>
             <Circle cx={95} cy={64} r={10} fill={fg} fillOpacity={0.85} />
             <Line
