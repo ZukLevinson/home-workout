@@ -103,11 +103,13 @@ export default function App(): React.ReactElement {
 
   // Navigation & UI state
   const [currentTab, setCurrentTab] = useState<WorkoutTabKey>('workoutA');
+  const [lastNonProgressTab, setLastNonProgressTab] = useState<WorkoutTabKey>('workoutA');
   const [currentExerciseIdx, setCurrentExerciseIdx] = useState<number>(0);
   const [currentSetIdx, setCurrentSetIdx] = useState<number>(0);
   const [mobilePane, setMobilePane] = useState<'set' | 'demo' | 'trend'>('set');
   const [infoSubPane, setInfoSubPane] = useState<'demo' | 'steps'>('demo');
   const [guideModalOpen, setGuideModalOpen] = useState<boolean>(false);
+  const [exerciseDropdownOpen, setExerciseDropdownOpen] = useState<boolean>(false);
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
   const [muscleFilter, setMuscleFilter] = useState<string>('all');
   const [animPaused, setAnimPaused] = useState<boolean>(false);
@@ -669,13 +671,30 @@ export default function App(): React.ReactElement {
   const fSemi = fontForWeight('semibold', fontsLoaded);
   const fBold = fontForWeight('bold', fontsLoaded);
 
-  const navTabs: { key: WorkoutTabKey; label: string; badge?: number }[] = [
+  const navTabs: { key: WorkoutTabKey; label: string }[] = [
     { key: 'workoutA', label: 'אימון בית 1: חזה, גב וזרועות' },
     { key: 'workoutB', label: 'אימון בית 2: כתפיים, גב וזרועות' },
-    { key: 'progress', label: '📈 ההתקדמות שלי', badge: sortedHistoryDesc.length },
     { key: 'all', label: 'כל התרגילים' },
     { key: 'calculator', label: '🔩 מחשבון פלטות' },
   ];
+
+  const selectMainTab = (nextTab: WorkoutTabKey) => {
+    setSaveFeedback(null);
+    setExerciseDropdownOpen(false);
+    if (nextTab !== 'progress') {
+      setLastNonProgressTab(nextTab);
+    }
+    setCurrentTab(nextTab);
+    setCurrentExerciseIdx(0);
+    setCurrentSetIdx(0);
+    setMobilePane('set');
+    if (
+      exerciseScrollRef.current &&
+      typeof exerciseScrollRef.current.scrollTo === 'function'
+    ) {
+      exerciseScrollRef.current.scrollTo({ y: 0, animated: false });
+    }
+  };
 
   const isWorkoutTab = currentTab !== 'progress' && currentTab !== 'calculator';
   const safeExIdx =
@@ -807,20 +826,57 @@ export default function App(): React.ReactElement {
           </View>
 
           <View style={styles.topUtilityRow}>
+            {/* Dedicated Show My Progress button */}
             <Pressable
-              onPress={() => setGuideModalOpen(true)}
+              onPress={() =>
+                selectMainTab(currentTab === 'progress' ? lastNonProgressTab : 'progress')
+              }
               style={[
-                styles.utilityBtn,
-                { backgroundColor: colors.secondary, borderColor: colors.border },
+                styles.dedicatedActionBtn,
+                {
+                  backgroundColor:
+                    currentTab === 'progress' ? colors.primary : colors.primarySoft,
+                  borderColor: colors.primary,
+                },
               ]}
             >
               <Text
                 style={[
-                  styles.utilityBtnText,
-                  { color: colors.secondaryForeground, fontFamily: fSemi },
+                  styles.dedicatedActionText,
+                  {
+                    color:
+                      currentTab === 'progress' ? colors.primaryForeground : colors.primary,
+                    fontFamily: fBold,
+                  },
                 ]}
               >
-                📖 מדריך, לוח שבועי וציוד
+                📈 ההתקדמות שלי ({sortedHistoryDesc.length})
+              </Text>
+            </Pressable>
+
+            {/* Dedicated Guide & Equipment button */}
+            <Pressable
+              onPress={() => setGuideModalOpen(true)}
+              style={[
+                styles.dedicatedActionBtn,
+                {
+                  backgroundColor: guideModalOpen ? colors.primary : colors.secondary,
+                  borderColor: guideModalOpen ? colors.primary : colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.dedicatedActionText,
+                  {
+                    color: guideModalOpen
+                      ? colors.primaryForeground
+                      : colors.secondaryForeground,
+                    fontFamily: fBold,
+                  },
+                ]}
+              >
+                📖 מדריך וציוד
               </Text>
             </Pressable>
 
@@ -834,7 +890,7 @@ export default function App(): React.ReactElement {
               <Text
                 style={[styles.utilityBtnText, { color: colors.foreground, fontFamily: fMed }]}
               >
-                {animPaused ? '▶ הפעל אנימציה' : '⏸ השהה אנימציה'}
+                {animPaused ? '▶ אנימציה' : '⏸ אנימציה'}
               </Text>
             </Pressable>
 
@@ -854,7 +910,7 @@ export default function App(): React.ReactElement {
                       { color: colors.primary, fontFamily: fSemi },
                     ]}
                   >
-                    🔗 התחבר עם Google
+                    🔗 Google
                   </Text>
                 </Pressable>
               )}
@@ -872,19 +928,7 @@ export default function App(): React.ReactElement {
             return (
               <Pressable
                 key={t.key}
-                onPress={() => {
-                  setSaveFeedback(null);
-                  setCurrentTab(t.key);
-                  setCurrentExerciseIdx(0);
-                  setCurrentSetIdx(0);
-                  setMobilePane('set');
-                  if (
-                    exerciseScrollRef.current &&
-                    typeof exerciseScrollRef.current.scrollTo === 'function'
-                  ) {
-                    exerciseScrollRef.current.scrollTo({ y: 0, animated: false });
-                  }
-                }}
+                onPress={() => selectMainTab(t.key)}
                 style={[
                   styles.tabBtnCompact,
                   {
@@ -904,34 +948,12 @@ export default function App(): React.ReactElement {
                 >
                   {t.label}
                 </Text>
-                {typeof t.badge === 'number' && (
-                  <View
-                    style={[
-                      styles.tabCountBadge,
-                      {
-                        backgroundColor: active ? 'rgba(255,255,255,0.22)' : colors.secondary,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.tabCountText,
-                        {
-                          color: active ? colors.primaryForeground : colors.secondaryForeground,
-                          fontFamily: fBold,
-                        },
-                      ]}
-                    >
-                      {t.badge}
-                    </Text>
-                  </View>
-                )}
               </Pressable>
             );
           })}
         </ScrollView>
 
-        {/* Row 3 (Muscle filter if 'all' + Exercise Stepper Strip in workout tabs) */}
+        {/* Row 3 (Muscle filter if 'all' + Exercise Dropdown Switcher in workout tabs) */}
         {currentTab === 'all' && (
           <ScrollView
             horizontal
@@ -973,70 +995,115 @@ export default function App(): React.ReactElement {
           </ScrollView>
         )}
 
-        {isWorkoutTab && visibleExercises.length > 0 && (
-          <View style={styles.stepperBarWrap}>
-            <Text
-              style={[
-                styles.stepperCounterText,
-                { color: colors.mutedForeground, fontFamily: fBold },
-              ]}
-            >
-              תרגיל {safeExIdx + 1} מתוך {visibleExercises.length}
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.stepperDotsScroll}
-            >
-              {visibleExercises.map((itemEx, idx) => {
-                const isCur = idx === safeExIdx;
-                const { doneCount, effectiveSets, allDone } = getExerciseDoneStats(itemEx);
-                return (
-                  <Pressable
-                    key={itemEx.id}
-                    onPress={() => goToExercise(idx)}
+        {isWorkoutTab && visibleExercises.length > 0 && activeEx && (() => {
+          const { doneCount, effectiveSets, allDone } = getExerciseDoneStats(activeEx);
+          return (
+            <View style={styles.dropdownRowWrap}>
+              <Pressable
+                disabled={safeExIdx <= 0}
+                onPress={() => goToExercise(safeExIdx - 1, 0)}
+                style={[
+                  styles.dropdownStepArrowBtn,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    opacity: safeExIdx <= 0 ? 0.35 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fBold }]}>
+                  →
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setExerciseDropdownOpen(true)}
+                style={[
+                  styles.exerciseDropdownBtn,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: exerciseDropdownOpen ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.exerciseDropdownRight}>
+                  <View
                     style={[
-                      styles.stepperDotBtn,
+                      styles.dropdownCountBadge,
+                      { backgroundColor: allDone ? colors.success : colors.primary },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dropdownCountText,
+                        { color: colors.primaryForeground, fontFamily: fBold },
+                      ]}
+                    >
+                      {safeExIdx + 1}/{visibleExercises.length}
+                    </Text>
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.exerciseDropdownTitle,
+                      { color: colors.foreground, fontFamily: fBold },
+                    ]}
+                  >
+                    {activeEx.name}
+                  </Text>
+                </View>
+
+                <View style={styles.exerciseDropdownLeft}>
+                  <View
+                    style={[
+                      styles.dropdownSetsPill,
                       {
-                        backgroundColor: isCur
-                          ? colors.primary
-                          : allDone
-                          ? colors.successSoft
-                          : colors.background,
-                        borderColor: isCur
-                          ? colors.primary
-                          : allDone
-                          ? colors.success
-                          : colors.border,
+                        backgroundColor: allDone ? colors.successSoft : colors.secondary,
                       },
                     ]}
                   >
                     <Text
                       style={[
-                        styles.stepperDotText,
+                        styles.dropdownSetsText,
                         {
-                          color: isCur
-                            ? colors.primaryForeground
-                            : allDone
-                            ? colors.success
-                            : colors.foreground,
-                          fontFamily: fBold,
+                          color: allDone ? colors.success : colors.secondaryForeground,
+                          fontFamily: fSemi,
                         },
                       ]}
                     >
-                      {allDone ? `${idx + 1} ✓` : `${idx + 1}`}
-                      {isCur
-                        ? ` • ${itemEx.muscle}`
-                        : doneCount > 0 && !allDone
-                        ? ` (${doneCount}/${effectiveSets})`
-                        : ''}
+                      {doneCount}/{effectiveSets} {allDone ? '✓' : 'סטים'}
                     </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.dropdownChevron,
+                      { color: colors.primary, fontFamily: fBold },
+                    ]}
+                  >
+                    החלף תרגיל ▾
+                  </Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                disabled={safeExIdx >= visibleExercises.length - 1}
+                onPress={() => goToExercise(safeExIdx + 1, 0)}
+                style={[
+                  styles.dropdownStepArrowBtn,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    opacity: safeExIdx >= visibleExercises.length - 1 ? 0.35 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fBold }]}>
+                  ←
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })()}
       </View>
 
       {/* NON-SCROLLING FULLSCREEN WORKOUT STAGE (1 exercise & 1 set at a time, capped at page height) */}
@@ -2623,7 +2690,7 @@ export default function App(): React.ReactElement {
 
           <Pressable
             onPress={() => {
-              if (currentTab !== 'progress') setCurrentTab('progress');
+              if (currentTab !== 'progress') selectMainTab('progress');
             }}
             style={styles.statsCluster}
           >
@@ -2662,6 +2729,169 @@ export default function App(): React.ReactElement {
           </Pressable>
         </View>
       </View>
+
+      {/* EXERCISE SWITCHER DROPDOWN MODAL */}
+      <Modal
+        visible={exerciseDropdownOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setExerciseDropdownOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setExerciseDropdownOpen(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={[
+              styles.modalCard,
+              styles.dropdownListModal,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <View
+              style={[
+                styles.rowBetween,
+                { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 },
+              ]}
+            >
+              <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
+                🏋️ בחר תרגיל ({visibleExercises.length} תרגילים)
+              </Text>
+              <Pressable
+                onPress={() => setExerciseDropdownOpen(false)}
+                style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
+              >
+                <Text
+                  style={[
+                    styles.smallBtnText,
+                    { color: colors.secondaryForeground, fontFamily: fBold },
+                  ]}
+                >
+                  סגור ✕
+                </Text>
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+              {visibleExercises.map((itemEx, idx) => {
+                const isCur = idx === safeExIdx;
+                const { doneCount, effectiveSets, allDone, bestWeightToday } =
+                  getExerciseDoneStats(itemEx);
+                const lastLog = getLastExerciseLog(itemEx.id);
+                const lastSummary =
+                  lastLog && lastLog.sets.length > 0
+                    ? `פעם קודמת: ${lastLog.sets[0].weight} קילוגרם`
+                    : `היום: ${bestWeightToday} קילוגרם`;
+                return (
+                  <Pressable
+                    key={itemEx.id}
+                    onPress={() => {
+                      goToExercise(idx, 0);
+                      setExerciseDropdownOpen(false);
+                    }}
+                    style={[
+                      styles.dropdownListRow,
+                      {
+                        backgroundColor: isCur
+                          ? colors.primarySoft
+                          : allDone
+                          ? colors.successSoft
+                          : colors.background,
+                        borderColor: isCur
+                          ? colors.primary
+                          : allDone
+                          ? colors.success
+                          : colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.exerciseDropdownRight}>
+                      <View
+                        style={[
+                          styles.indexBadge,
+                          {
+                            backgroundColor: isCur
+                              ? colors.primary
+                              : allDone
+                              ? colors.success
+                              : colors.secondary,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.indexBadgeText,
+                            {
+                              color:
+                                isCur || allDone
+                                  ? colors.primaryForeground
+                                  : colors.secondaryForeground,
+                              fontFamily: fBold,
+                            },
+                          ]}
+                        >
+                          {allDone ? '✓' : idx + 1}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text
+                          style={[
+                            styles.subCardTitle,
+                            { color: colors.foreground, fontFamily: fBold },
+                          ]}
+                        >
+                          {itemEx.name}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.subCardText,
+                            { color: colors.mutedForeground, fontFamily: fReg },
+                          ]}
+                        >
+                          {itemEx.muscle} • {effectiveSets} סטים • {lastSummary}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.dropdownSetsPill,
+                        {
+                          backgroundColor: isCur
+                            ? colors.primary
+                            : allDone
+                            ? colors.success
+                            : colors.card,
+                          borderWidth: 1,
+                          borderColor: isCur
+                            ? colors.primary
+                            : allDone
+                            ? colors.success
+                            : colors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.dropdownSetsText,
+                          {
+                            color:
+                              isCur || allDone ? colors.primaryForeground : colors.foreground,
+                            fontFamily: fBold,
+                          },
+                        ]}
+                      >
+                        {allDone ? 'הושלם ✓' : `${doneCount}/${effectiveSets}`}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* GUIDE, EQUIPMENT INVENTORY & SAFETY MODAL */}
       <Modal
@@ -3033,6 +3263,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     writingDirection: 'rtl',
   },
+  dedicatedActionBtn: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dedicatedActionText: {
+    fontSize: 12,
+    writingDirection: 'rtl',
+  },
   compactTimerVal: {
     fontSize: 14,
     marginLeft: 2,
@@ -3071,30 +3313,83 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     borderWidth: 1,
   },
-  stepperBarWrap: {
+  dropdownRowWrap: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 2,
+  },
+  dropdownStepArrowBtn: {
+    width: 34,
+    height: 34,
+    borderWidth: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exerciseDropdownBtn: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    minHeight: 34,
+  },
+  exerciseDropdownRight: {
+    flex: 1,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 8,
-    paddingTop: 2,
   },
-  stepperCounterText: {
-    fontSize: 12,
+  dropdownCountBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  dropdownCountText: {
+    fontSize: 11,
+  },
+  exerciseDropdownTitle: {
+    flex: 1,
+    fontSize: 13,
+    textAlign: 'right',
     writingDirection: 'rtl',
   },
-  stepperDotsScroll: {
+  exerciseDropdownLeft: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: 6,
   },
-  stepperDotBtn: {
-    borderWidth: 1,
+  dropdownSetsPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
   },
-  stepperDotText: {
+  dropdownSetsText: {
+    fontSize: 11,
+    writingDirection: 'rtl',
+  },
+  dropdownChevron: {
     fontSize: 12,
     writingDirection: 'rtl',
+  },
+  dropdownListModal: {
+    maxWidth: 560,
+    maxHeight: '80%',
+  },
+  dropdownListRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   fullscreenWorkoutStage: {
     flex: 1,
