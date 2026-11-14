@@ -1720,7 +1720,7 @@ export default function App(): React.ReactElement {
                           numberOfLines={1}
                           style={[styles.exTitleCompact, { color: colors.foreground, fontFamily: fBold }]}
                         >
-                          {idx + 1}. {ex.name}
+                          {idx + 1}. {isWide ? ex.name : ex.shortName}
                         </Text>
                         <Text
                           numberOfLines={1}
@@ -1729,7 +1729,23 @@ export default function App(): React.ReactElement {
                             { color: colors.mutedForeground, fontFamily: fReg },
                           ]}
                         >
-                          {ex.muscle} • {effectiveSets} סטים × {ex.reps} • {ex.equipment}
+                          {(() => {
+                            const shortEquipLabel =
+                              effectiveMode === 'pair'
+                                ? '2 משקולות'
+                                : effectiveMode === 'single'
+                                ? 'משקולת 1'
+                                : effectiveMode === 'barbell'
+                                ? 'מוט ארוך'
+                                : effectiveMode === 'platePair'
+                                ? '2 פלטות'
+                                : 'משקל גוף';
+                            const repMatch = ex.reps.match(/\d+\s*(?:עד|-)\s*\d+/);
+                            const shortRepsLabel = repMatch
+                              ? `${repMatch[0].replace(/\s*עד\s*/, '–')} חזרות`
+                              : `${ex.defaultReps} חזרות`;
+                            return `${ex.muscle} • ${effectiveSets} סטים • ${shortRepsLabel} • ${shortEquipLabel}`;
+                          })()}
                         </Text>
                       </View>
                     </View>
