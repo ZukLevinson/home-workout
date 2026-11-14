@@ -1650,31 +1650,6 @@ export default function App(): React.ReactElement {
                     </View>
                   )}
 
-                  {/* Plate Setup Recipe */}
-                  <View
-                    style={[
-                      styles.plateRecipeBarCompact,
-                      !isWide && styles.plateRecipeBarMobile,
-                      { backgroundColor: colors.background, borderColor: colors.border },
-                    ]}
-                  >
-                    <Text
-                      numberOfLines={isWide ? 2 : 1}
-                      style={[
-                        styles.plateRecipeTextCompact,
-                        { color: colors.foreground, fontFamily: fMed },
-                      ]}
-                    >
-                      🔩{' '}
-                      <Text style={{ color: colors.primary, fontFamily: fBold }}>
-                        {isWide
-                          ? `איך מרכיבים ${setCfg.totalWeight} קילוגרם: `
-                          : `הרכבת ${setCfg.totalWeight} קילוגרם: `}
-                      </Text>
-                      {describeConfigSetup(setCfg, effectiveMode)}
-                    </Text>
-                  </View>
-
                   {!isWide && (
                     <View style={styles.infoQuickStrip}>
                       <Pressable
@@ -4374,18 +4349,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 1,
   },
-  plateRecipeBarCompact: {
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  plateRecipeTextCompact: {
-    fontSize: 11,
-    lineHeight: 16,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
   guidancePane: {
     flex: 1,
     gap: 8,
@@ -5104,10 +5067,6 @@ const styles = StyleSheet.create({
   },
   dualVisualRowMobile: {
     minHeight: 145,
-  },
-  plateRecipeBarMobile: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
   },
   bottomDockMobile: {
     paddingHorizontal: 8,
