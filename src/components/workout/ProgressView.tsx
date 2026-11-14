@@ -4,17 +4,19 @@ import {
   Award01,
   BarChart02,
   Calendar,
+  Clock,
   Download01,
   File02,
   Trash01,
   Upload01,
 } from '@untitledui/icons';
-import { Badge } from '@/components/base/badges/badges';
+import { Badge, BadgeWithIcon } from '@/components/base/badges/badges';
 import { Button } from '@/components/base/buttons/button';
 import { TextArea } from '@/components/base/textarea/textarea';
 import { FeaturedIcon } from '@/components/foundations/featured-icon/featured-icon';
 import ExerciseGifIcon from '../ExerciseGifIcon';
 import ProgressChart from '../ProgressChart';
+import { formatElapsedDuration } from './Modals';
 import { EXERCISES } from '../../data/exercises';
 import type { SyncStatus, ThemeColors, WorkoutSession } from '../../types';
 
@@ -223,7 +225,14 @@ export function ProgressView({
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-secondary pb-2.5">
                     <div className="flex flex-col gap-0.5">
-                      <h3 className="text-sm font-bold text-primary">{sess.workoutTitle}</h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-bold text-primary">{sess.workoutTitle}</h3>
+                        {typeof sess.durationSec === 'number' && sess.durationSec > 0 && (
+                          <BadgeWithIcon size="sm" color="brand" iconLeading={Clock}>
+                            משך: {formatElapsedDuration(sess.durationSec)}
+                          </BadgeWithIcon>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1.5 text-xs text-tertiary">
                         <Calendar className="size-3.5" />
                         <span>{sess.displayDate}</span>

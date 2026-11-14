@@ -35,9 +35,21 @@ import {
 import type { EquipmentMode, Exercise, PlateConfig, SetEntry, ThemeColors, WorkoutSession } from '../../types';
 
 function formatTime(sec: number): string {
-  const m = String(Math.floor(sec / 60)).padStart(2, '0');
-  const s = String(sec % 60).padStart(2, '0');
+  const safe = Math.max(0, Math.floor(sec));
+  const m = String(Math.floor(safe / 60)).padStart(2, '0');
+  const s = String(safe % 60).padStart(2, '0');
   return `${m}:${s}`;
+}
+
+export function formatElapsedDuration(sec: number): string {
+  const safe = Math.max(0, Math.floor(sec));
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 export interface ExerciseSwitcherModalProps {
@@ -576,12 +588,13 @@ export interface SaveWorkoutModalProps {
   timerRunning: boolean;
   timerFinished: boolean;
   timerSeconds: number;
+  workoutElapsedSec: number;
   totalDoneInView: number;
   totalSetsInView: number;
   workoutNote: string;
   onChangeWorkoutNote: (val: string) => void;
   saveFeedback: { error: boolean; text: string } | null;
-  onClearSetCheckmarks: () => void;
+  onDiscardWorkout: () => void;
   onSaveWorkoutSession: () => void;
 }
 
@@ -591,12 +604,13 @@ export function SaveWorkoutModal({
   timerRunning,
   timerFinished,
   timerSeconds,
+  workoutElapsedSec,
   totalDoneInView,
   totalSetsInView,
   workoutNote,
   onChangeWorkoutNote,
   saveFeedback,
-  onClearSetCheckmarks,
+  onDiscardWorkout,
   onSaveWorkoutSession,
 }: SaveWorkoutModalProps) {
   return (
@@ -613,7 +627,7 @@ export function SaveWorkoutModal({
             <div className="flex items-center gap-2.5">
               <FeaturedIcon icon={Save01} size="sm" color="brand" theme="modern" />
               <h2 className="text-sm font-bold text-primary sm:text-md">
-                שמירת האימון ביומן ההתקדמות
+                סיום ושמירת האימון
               </h2>
             </div>
 
@@ -632,16 +646,21 @@ export function SaveWorkoutModal({
           </div>
 
           <div className="flex flex-col gap-2">
-            <BadgeWithIcon
-              size="md"
-              color={totalDoneInView > 0 ? 'success' : 'gray'}
-              iconLeading={CheckCircle}
-            >
-              {totalDoneInView} מתוך {totalSetsInView} סטים סומנו כבוצעו
-            </BadgeWithIcon>
+            <div className="flex flex-wrap items-center gap-2">
+              <BadgeWithIcon
+                size="md"
+                color={totalDoneInView > 0 ? 'success' : 'gray'}
+                iconLeading={CheckCircle}
+              >
+                {totalDoneInView} מתוך {totalSetsInView} סטים סומנו כבוצעו
+              </BadgeWithIcon>
+              <BadgeWithIcon size="md" color="brand" iconLeading={Clock}>
+                זמן אימון: {formatElapsedDuration(workoutElapsedSec)}
+              </BadgeWithIcon>
+            </div>
             <p className="text-xs leading-relaxed text-tertiary sm:text-sm">
-              כל הסטים שסימנת (כולל המשקלים ומספר החזרות) יישמרו עם התאריך של היום בענן ועל
-              המכשיר, ויעדכנו אוטומטית את נתוני הפעם הקודמת והמגמה בכל תרגיל.
+              כל הסטים שסימנת (כולל המשקלים, החזרות ומשך האימון) יישמרו ביומן בענן ועל המכשיר,
+              או שתוכל לבטל ולזרוק את האימון הנוכחי.
             </p>
           </div>
 
@@ -669,11 +688,11 @@ export function SaveWorkoutModal({
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <Button
               size="sm"
-              color="secondary"
+              color="secondary-destructive"
               iconLeading={Trash01}
-              onPress={onClearSetCheckmarks}
+              onPress={onDiscardWorkout}
             >
-              נקה סימוני סטים
+              בטל וזרוק אימון
             </Button>
             <Button
               size="md"
@@ -681,7 +700,76 @@ export function SaveWorkoutModal({
               iconLeading={Save01}
               onPress={onSaveWorkoutSession}
             >
-              שמור אימון ביומן
+              שמור וסיים אימון
+            </Button>
+          </div>
+        </Dialog>
+      </Modal>
+    </ModalOverlay>
+  );
+}
+
+export interface DiscardWorkoutModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  workoutElapsedSec: number;
+  totalDoneInView: number;
+  onConfirmDiscard: () => void;
+}
+
+export function DiscardWorkoutModal({
+  isOpen,
+  onClose,
+  workoutElapsedSec,
+  totalDoneInView,
+  onConfirmDiscard,
+}: DiscardWorkoutModalProps) {
+  return (
+    <ModalOverlay
+      isOpen={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      isDismissable
+    >
+      <Modal className="max-w-md ring-1 ring-error_subtle/60">
+        <Dialog className="flex flex-col gap-4 p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <FeaturedIcon icon={AlertTriangle} size="sm" color="error" theme="modern" />
+              <h2 className="text-sm font-bold text-primary sm:text-md">
+                ביטול וזריקת האימון הנוכחי?
+              </h2>
+            </div>
+            <CloseButton onPress={onClose} label="סגור" size="sm" />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <BadgeWithIcon size="sm" color="gray" type="modern" iconLeading={Clock}>
+                זמן שנמדד: {formatElapsedDuration(workoutElapsedSec)}
+              </BadgeWithIcon>
+              <Badge size="sm" color="gray" type="modern">
+                {totalDoneInView} סטים שסומנו יימחקו
+              </Badge>
+            </div>
+            <p className="text-xs leading-relaxed text-tertiary sm:text-sm">
+              האימון הפעיל ייעצר ותחזור למסך תחילת האימון ללא שמירה ביומן ההתקדמות.
+              היסטוריית האימונים הקודמים והמשקלים המועדפים יישמרו.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+            <Button size="sm" color="secondary" onPress={onClose}>
+              המשך באימון
+            </Button>
+            <Button
+              size="sm"
+              color="primary-destructive"
+              iconLeading={Trash01}
+              onPress={onConfirmDiscard}
+            >
+              בטל וזרוק אימון
             </Button>
           </div>
         </Dialog>

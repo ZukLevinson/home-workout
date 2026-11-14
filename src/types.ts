@@ -75,7 +75,15 @@ export interface ModeOverrideEntry {
   mode: EquipmentMode;
 }
 
-export type ActiveDraft = Record<string, SetEntry | ModeOverrideEntry | undefined>;
+export interface ActiveWorkoutState {
+  startedAtMs: number;
+  workoutTab: 'workoutA' | 'workoutB' | 'all';
+}
+
+export type ActiveDraft = Record<
+  string,
+  SetEntry | ModeOverrideEntry | ActiveWorkoutState | undefined
+>;
 
 export interface LoggedSet {
   setNum: number;
@@ -98,6 +106,7 @@ export interface WorkoutSession {
   workoutTitle?: string;
   note?: string;
   totalSets?: number;
+  durationSec?: number;
   items?: LoggedExerciseItem[];
 }
 

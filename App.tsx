@@ -34,6 +34,7 @@ import {
   Save01,
   Scales02,
   Sun,
+  Trash01,
 } from '@untitledui/icons';
 
 import { Tab, TabList, Tabs } from '@/components/application/tabs/tabs';
@@ -57,13 +58,16 @@ import EquipmentBuildDiagram from './src/components/EquipmentBuildDiagram';
 import ExerciseTrendCard from './src/components/ExerciseTrendCard';
 import ExerciseGifIcon from './src/components/ExerciseGifIcon';
 import {
+  DiscardWorkoutModal,
   ExerciseStepsModal,
   ExerciseSwitcherModal,
   GuideModal,
   SaveWorkoutModal,
   WeightsPickerModal,
+  formatElapsedDuration,
 } from './src/components/workout/Modals';
 import { ProgressView } from './src/components/workout/ProgressView';
+import { StartWorkoutView } from './src/components/workout/StartWorkoutView';
 import { isFirebaseConfigured } from './src/firebaseConfig';
 import {
   loadLocalState,
@@ -77,6 +81,7 @@ import {
 } from './src/services/firebase';
 import type {
   ActiveDraft,
+  ActiveWorkoutState,
   EquipmentMode,
   Exercise,
   LoggedExerciseItem,
@@ -89,18 +94,55 @@ import type {
   WorkoutTabKey,
 } from './src/types';
 
+const ACTIVE_WORKOUT_KEY = '__workout';
+
 function formatTime(sec: number): string {
   const m = String(Math.floor(sec / 60)).padStart(2, '0');
   const s = String(sec % 60).padStart(2, '0');
   return `${m}:${s}`;
 }
 
-function isSetEntry(val: SetEntry | ModeOverrideEntry | undefined): val is SetEntry {
-  return Boolean(val && 'weight' in val && 'reps' in val);
+function isSetEntry(
+  val: SetEntry | ModeOverrideEntry | ActiveWorkoutState | undefined
+): val is SetEntry {
+  return Boolean(val && typeof val === 'object' && 'weight' in val && 'reps' in val);
 }
 
-function isModeOverride(val: SetEntry | ModeOverrideEntry | undefined): val is ModeOverrideEntry {
-  return Boolean(val && 'mode' in val);
+function isModeOverride(
+  val: SetEntry | ModeOverrideEntry | ActiveWorkoutState | undefined
+): val is ModeOverrideEntry {
+  return Boolean(val && typeof val === 'object' && 'mode' in val);
+}
+
+function isActiveWorkoutState(
+  val: SetEntry | ModeOverrideEntry | ActiveWorkoutState | undefined
+): val is ActiveWorkoutState {
+  return Boolean(
+    val &&
+      typeof val === 'object' &&
+      'startedAtMs' in val &&
+      typeof val.startedAtMs === 'number' &&
+      'workoutTab' in val
+  );
+}
+
+function getExercisesForTab(tab: WorkoutTabKey, muscleFilter: string): Exercise[] {
+  if (tab === 'workoutA') {
+    return EXERCISES.filter((e) => e.workouts.includes('workoutA')).sort(
+      (a, b) => (a.orderA ?? 999) - (b.orderA ?? 999)
+    );
+  }
+  if (tab === 'workoutB') {
+    return EXERCISES.filter((e) => e.workouts.includes('workoutB')).sort(
+      (a, b) => (a.orderB ?? 999) - (b.orderB ?? 999)
+    );
+  }
+  if (tab === 'all') {
+    return muscleFilter === 'all'
+      ? EXERCISES
+      : EXERCISES.filter((e) => e.muscle === muscleFilter);
+  }
+  return [];
 }
 
 const CONFIG_CACHE: Record<EquipmentMode, PlateConfig[]> = {
@@ -144,15 +186,19 @@ export default function App(): React.ReactElement {
   const [exerciseDropdownOpen, setExerciseDropdownOpen] = useState<boolean>(false);
   const [weightsModalOpen, setWeightsModalOpen] = useState<boolean>(false);
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
+  const [discardModalOpen, setDiscardModalOpen] = useState<boolean>(false);
   const [muscleFilter, setMuscleFilter] = useState<string>('all');
   const [animPaused, setAnimPaused] = useState<boolean>(false);
 
   const [exModeOverrides, setExModeOverrides] = useState<Partial<Record<string, EquipmentMode>>>({});
 
-  // Rest timer state
+  // Rest timer state (per set)
   const [timerSeconds, setTimerSeconds] = useState<number>(90);
   const [timerRunning, setTimerRunning] = useState<boolean>(false);
   const [timerFinished, setTimerFinished] = useState<boolean>(false);
+
+  // Active workout clock tick
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   // Progress & Firebase Cloud state
   const [activeDraft, setActiveDraft] = useState<ActiveDraft>({});
@@ -216,7 +262,14 @@ export default function App(): React.ReactElement {
     let mounted = true;
     loadLocalState().then(({ draft, history }) => {
       if (!mounted) return;
-      if (draft && Object.keys(draft).length > 0) setActiveDraft(draft);
+      if (draft && Object.keys(draft).length > 0) {
+        setActiveDraft(draft);
+        const restoredWorkout = draft[ACTIVE_WORKOUT_KEY];
+        if (isActiveWorkoutState(restoredWorkout)) {
+          setCurrentTab(restoredWorkout.workoutTab);
+          setLastNonProgressTab(restoredWorkout.workoutTab);
+        }
+      }
       if (Array.isArray(history) && history.length > 0) setWorkoutHistory(history);
     });
 
@@ -245,6 +298,14 @@ export default function App(): React.ReactElement {
     };
   }, []);
 
+  const rawWorkoutState = activeDraft[ACTIVE_WORKOUT_KEY];
+  const activeWorkout = isActiveWorkoutState(rawWorkoutState) ? rawWorkoutState : null;
+  const isWorkoutActive = activeWorkout !== null;
+  const workoutStartedAtMs = activeWorkout?.startedAtMs ?? null;
+  const workoutElapsedSec = activeWorkout
+    ? Math.max(0, Math.floor((nowMs - activeWorkout.startedAtMs) / 1000))
+    : 0;
+
   useEffect(() => {
     if (!timerRunning) return undefined;
     const id = setInterval(() => {
@@ -259,6 +320,29 @@ export default function App(): React.ReactElement {
     }, 1000);
     return () => clearInterval(id);
   }, [timerRunning]);
+
+  // Continuous running timer for the entire active workout (independent from per-set rest timer)
+  useEffect(() => {
+    if (workoutStartedAtMs === null) return undefined;
+    setNowMs(Date.now());
+    const id = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        setNowMs(Date.now());
+      }
+    };
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+    }
+    return () => {
+      clearInterval(id);
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      }
+    };
+  }, [workoutStartedAtMs]);
 
   const startTimer = (sec: number) => {
     setTimerFinished(false);
@@ -330,14 +414,18 @@ export default function App(): React.ReactElement {
     };
   };
 
-  const persistDraft = (nextDraft: ActiveDraft) => {
+  const persistDraft = (nextDraft: ActiveDraft, immediate = false) => {
     setActiveDraft(nextDraft);
     saveLocalDraft(nextDraft);
     if (firebaseUser) {
       if (draftSyncTimeout.current) clearTimeout(draftSyncTimeout.current);
-      draftSyncTimeout.current = setTimeout(() => {
+      if (immediate) {
         syncDraftToCloud(firebaseUser.uid, nextDraft).catch(() => {});
-      }, 450);
+      } else {
+        draftSyncTimeout.current = setTimeout(() => {
+          syncDraftToCloud(firebaseUser.uid, nextDraft).catch(() => {});
+        }, 450);
+      }
     }
   };
 
@@ -431,55 +519,110 @@ export default function App(): React.ReactElement {
     }
   };
 
-  const clearSetCheckmarks = () => {
+  const buildCleanedDraft = (keepActiveWorkout: boolean): ActiveDraft => {
     const cleaned: ActiveDraft = {};
     Object.keys(activeDraft).forEach((k) => {
       const entry = activeDraft[k];
       if (k.startsWith('__mode_')) {
         cleaned[k] = entry;
+      } else if (keepActiveWorkout && k === ACTIVE_WORKOUT_KEY && isActiveWorkoutState(entry)) {
+        cleaned[k] = entry;
       } else if (isSetEntry(entry)) {
         cleaned[k] = { ...entry, done: false };
       }
     });
-    persistDraft(cleaned);
+    return cleaned;
   };
 
-  const visibleExercises = useMemo(() => {
-    if (currentTab === 'workoutA') {
-      return EXERCISES.filter((e) => e.workouts.includes('workoutA')).sort(
-        (a, b) => (a.orderA ?? 999) - (b.orderA ?? 999)
-      );
+  const clearSetCheckmarks = () => {
+    persistDraft(buildCleanedDraft(true));
+  };
+
+  const startWorkout = (startExIdx = 0) => {
+    const targetTab: 'workoutA' | 'workoutB' | 'all' =
+      currentTab === 'workoutA' || currentTab === 'workoutB' || currentTab === 'all'
+        ? currentTab
+        : lastNonProgressTab === 'workoutB' || lastNonProgressTab === 'all'
+        ? lastNonProgressTab
+        : 'workoutA';
+    const startedMs = Date.now();
+    const freshDraft = buildCleanedDraft(false);
+    freshDraft[ACTIVE_WORKOUT_KEY] = {
+      startedAtMs: startedMs,
+      workoutTab: targetTab,
+    };
+    setNowMs(startedMs);
+    persistDraft(freshDraft, true);
+    setTimerRunning(false);
+    setTimerFinished(false);
+    setTimerSeconds(90);
+    setSaveFeedback(null);
+    setWorkoutNote('');
+    setLastNonProgressTab(targetTab);
+    setCurrentTab(targetTab);
+    setCurrentExerciseIdx(Math.max(0, startExIdx));
+    setCurrentSetIdx(0);
+  };
+
+  const performDiscardWorkout = () => {
+    const returnTab = activeWorkout?.workoutTab || lastNonProgressTab;
+    persistDraft(buildCleanedDraft(false), true);
+    setTimerRunning(false);
+    setTimerFinished(false);
+    setTimerSeconds(90);
+    setWorkoutNote('');
+    setSaveFeedback(null);
+    setSaveModalOpen(false);
+    setDiscardModalOpen(false);
+    setExerciseDropdownOpen(false);
+    setWeightsModalOpen(false);
+    setExerciseStepsModalOpen(false);
+    setCurrentExerciseIdx(0);
+    setCurrentSetIdx(0);
+    if (currentTab === 'progress') {
+      setCurrentTab(returnTab === 'progress' ? 'workoutA' : returnTab);
     }
-    if (currentTab === 'workoutB') {
-      return EXERCISES.filter((e) => e.workouts.includes('workoutB')).sort(
-        (a, b) => (a.orderB ?? 999) - (b.orderB ?? 999)
-      );
-    }
-    if (currentTab === 'all') {
-      return muscleFilter === 'all'
-        ? EXERCISES
-        : EXERCISES.filter((e) => e.muscle === muscleFilter);
-    }
-    return [];
-  }, [currentTab, muscleFilter]);
+  };
+
+  const visibleExercises = useMemo(
+    () => getExercisesForTab(currentTab, muscleFilter),
+    [currentTab, muscleFilter]
+  );
+
+  const sessionTabKey: WorkoutTabKey =
+    activeWorkout?.workoutTab || (currentTab !== 'progress' ? currentTab : lastNonProgressTab);
+
+  const sessionExercises = useMemo(
+    () => getExercisesForTab(sessionTabKey, muscleFilter),
+    [sessionTabKey, muscleFilter]
+  );
 
   const { totalDoneInView, totalSetsInView } = useMemo(() => {
     let doneCount = 0;
     let totalCount = 0;
-    visibleExercises.forEach((ex) => {
+    sessionExercises.forEach((ex) => {
       totalCount += ex.sets;
       for (let s = 1; s <= ex.sets; s++) {
         if (getSetEntry(ex, s).done) doneCount++;
       }
     });
     return { totalDoneInView: doneCount, totalSetsInView: totalCount };
-  }, [visibleExercises, activeDraft, exModeOverrides, currentTab, sortedHistoryDesc]);
+  }, [sessionExercises, activeDraft, exModeOverrides, sessionTabKey, sortedHistoryDesc]);
+
+  const requestDiscardWorkout = () => {
+    if (totalDoneInView > 0) {
+      setSaveModalOpen(false);
+      setDiscardModalOpen(true);
+    } else {
+      performDiscardWorkout();
+    }
+  };
 
   const handleSaveWorkoutSession = async () => {
     const items: LoggedExerciseItem[] = [];
     let sessionTotalSets = 0;
 
-    visibleExercises.forEach((ex) => {
+    sessionExercises.forEach((ex) => {
       const doneSets: LoggedSet[] = [];
       for (let s = 1; s <= ex.sets; s++) {
         const entry = getSetEntry(ex, s);
@@ -500,13 +643,13 @@ export default function App(): React.ReactElement {
     if (items.length === 0) {
       setSaveFeedback({
         error: true,
-        text: 'סמן לפחות סט אחד שבוצע לפני שמירת האימון ביומן.',
+        text: 'סמן לפחות סט אחד שבוצע לפני שמירת האימון ביומן (או בטל וזרוק את האימון).',
       });
       return;
     }
 
     const now = new Date();
-    const nowMs = now.getTime();
+    const nowTimeMs = now.getTime();
     const displayDate = now.toLocaleDateString('he-IL', {
       day: '2-digit',
       month: '2-digit',
@@ -516,17 +659,23 @@ export default function App(): React.ReactElement {
     });
 
     const allowedTabs: WorkoutTabKey[] = ['workoutA', 'workoutB', 'all'];
-    const workoutTab = allowedTabs.includes(currentTab) ? currentTab : 'workoutA';
+    const workoutTab = allowedTabs.includes(sessionTabKey) ? sessionTabKey : 'workoutA';
+    const recordedDurationSec = activeWorkout
+      ? Math.max(1, Math.min(86400, Math.round((nowTimeMs - activeWorkout.startedAtMs) / 1000)))
+      : 1;
 
     const sessionDoc: WorkoutSession = {
-      id: `sess_${nowMs}`,
+      id: `sess_${nowTimeMs}`,
       isoDate: now.toISOString(),
-      createdAtMs: nowMs,
+      createdAtMs: nowTimeMs,
       displayDate,
       workoutTab,
-      workoutTitle: WORKOUT_NAMES_MAP[workoutTab] || 'אימון כוח',
+      workoutTitle:
+        WORKOUT_NAMES_MAP[workoutTab] ||
+        (workoutTab === 'all' ? 'אימון חופשי: כל התרגילים' : 'אימון כוח'),
       note: workoutNote.trim().slice(0, 500),
       totalSets: sessionTotalSets,
+      durationSec: recordedDurationSec,
       items,
     };
 
@@ -542,10 +691,15 @@ export default function App(): React.ReactElement {
       }
     }
 
-    clearSetCheckmarks();
+    persistDraft(buildCleanedDraft(false), true);
+    setTimerRunning(false);
+    setTimerFinished(false);
+    setTimerSeconds(90);
     setWorkoutNote('');
     setSaveFeedback(null);
     setSaveModalOpen(false);
+    setCurrentExerciseIdx(0);
+    setCurrentSetIdx(0);
     setCurrentTab('progress');
   };
 
@@ -605,6 +759,13 @@ export default function App(): React.ReactElement {
               (acc, it) => acc + ((it.sets || []).length || 0),
               0
             );
+            const dur =
+              typeof s.durationSec === 'number' &&
+              Number.isFinite(s.durationSec) &&
+              s.durationSec >= 0 &&
+              s.durationSec <= 86400
+                ? Math.round(s.durationSec)
+                : undefined;
             const rawTab = s.workoutTab || 'imported';
             return {
               id: String(s.id || `sess_${ts}`).slice(0, 80),
@@ -619,6 +780,7 @@ export default function App(): React.ReactElement {
               workoutTitle: String(s.workoutTitle || 'אימון מיובא').slice(0, 150),
               note: String(s.note || '').slice(0, 500),
               totalSets: Math.max(1, Math.min(150, setsSum || 1)),
+              ...(dur !== undefined ? { durationSec: dur } : {}),
               items: Array.isArray(s.items) ? s.items.slice(0, 30) : [],
             };
           })
@@ -679,6 +841,15 @@ export default function App(): React.ReactElement {
     setExerciseStepsModalOpen(false);
     if (nextTab !== 'progress') {
       setLastNonProgressTab(nextTab);
+      if (isWorkoutActive && activeWorkout && activeWorkout.workoutTab !== nextTab) {
+        persistDraft({
+          ...activeDraft,
+          [ACTIVE_WORKOUT_KEY]: {
+            ...activeWorkout,
+            workoutTab: nextTab,
+          },
+        });
+      }
     }
     setCurrentTab(nextTab);
     setCurrentExerciseIdx(0);
@@ -686,6 +857,10 @@ export default function App(): React.ReactElement {
   };
 
   const isWorkoutTab = currentTab !== 'progress';
+  const lastSessionForTab = useMemo(
+    () => sortedHistoryDesc.find((s) => s.workoutTab === currentTab) || null,
+    [sortedHistoryDesc, currentTab]
+  );
   const safeExIdx =
     visibleExercises.length > 0 ? Math.min(currentExerciseIdx, visibleExercises.length - 1) : 0;
   const activeEx = isWorkoutTab ? visibleExercises[safeExIdx] || null : null;
@@ -865,6 +1040,65 @@ export default function App(): React.ReactElement {
             </TabList>
           </Tabs>
 
+          {/* Running Active Workout Status Bar: Always visible while workout is running */}
+          {isWorkoutActive && activeWorkout && (
+            <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-xl bg-brand-primary_alt px-2.5 py-1.5 ring-1 ring-utility-brand-300 sm:px-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="size-2 shrink-0 animate-pulse rounded-full bg-fg-success-primary" />
+                <span className="truncate text-xs font-bold text-primary sm:text-sm">
+                  {isWide
+                    ? WORKOUT_NAMES_MAP[activeWorkout.workoutTab] || 'אימון פעיל: כל התרגילים'
+                    : activeWorkout.workoutTab === 'workoutA'
+                    ? 'אימון A פעיל'
+                    : activeWorkout.workoutTab === 'workoutB'
+                    ? 'אימון B פעיל'
+                    : 'אימון פעיל'}
+                </span>
+                <BadgeWithIcon
+                  size="sm"
+                  color="brand"
+                  iconLeading={Clock}
+                  className="font-mono tabular-nums"
+                >
+                  {isWide ? 'זמן אימון: ' : ''}
+                  {formatElapsedDuration(workoutElapsedSec)}
+                </BadgeWithIcon>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1.5">
+                {!isWorkoutTab && (
+                  <Button
+                    size="xs"
+                    color="secondary"
+                    iconLeading={Activity}
+                    onPress={() => selectMainTab(activeWorkout.workoutTab)}
+                  >
+                    חזור לאימון
+                  </Button>
+                )}
+                <Button
+                  size="xs"
+                  color="primary"
+                  iconLeading={Flag01}
+                  onPress={() => {
+                    setSaveFeedback(null);
+                    setSaveModalOpen(true);
+                  }}
+                >
+                  סיים אימון
+                </Button>
+                <Button
+                  size="xs"
+                  color="secondary-destructive"
+                  iconLeading={Trash01}
+                  onPress={requestDiscardWorkout}
+                >
+                  {isWide ? 'בטל אימון' : 'בטל'}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Row 3a: Muscle Group Filter Chips when 'all' tab is active */}
           {currentTab === 'all' && (
             <div className="scrollbar-hide flex items-center gap-1.5 overflow-x-auto pb-0.5">
@@ -890,6 +1124,7 @@ export default function App(): React.ReactElement {
 
           {/* Row 3b: Wide Desktop Exercise Switcher Bar */}
           {isWide &&
+            isWorkoutActive &&
             isWorkoutTab &&
             visibleExercises.length > 0 &&
             activeEx &&
@@ -958,8 +1193,24 @@ export default function App(): React.ReactElement {
         </div>
       </header>
 
-      {/* MAIN WORKOUT STAGE */}
-      {isWorkoutTab && (
+      {/* START WORKOUT SCREEN (before workout starts) */}
+      {!isWorkoutActive && isWorkoutTab && (
+        <StartWorkoutView
+          currentTab={currentTab === 'workoutB' || currentTab === 'all' ? currentTab : 'workoutA'}
+          muscleFilter={muscleFilter}
+          exercises={visibleExercises}
+          totalSets={totalSetsInView}
+          setupMessage={currentSetupMessage}
+          lastSessionForTab={lastSessionForTab}
+          getLastExerciseLog={getLastExerciseLog}
+          onStartWorkout={startWorkout}
+          onOpenGuide={() => setGuideModalOpen(true)}
+          colors={colors}
+        />
+      )}
+
+      {/* MAIN WORKOUT STAGE (only when workout is active) */}
+      {isWorkoutActive && isWorkoutTab && (
         <main
           className={`flex min-h-0 flex-1 flex-col ${
             isWide ? 'overflow-hidden px-4 py-3' : 'overflow-y-auto px-2.5 pt-2 pb-4'
@@ -1476,117 +1727,124 @@ export default function App(): React.ReactElement {
         />
       )}
 
-      {/* PERSISTENT BOTTOM DOCK: NAVIGATION + REST TIMER + LIVE STATS */}
-      <footer className="shrink-0 border-t border-secondary bg-primary px-2.5 py-2 sm:px-4 sm:py-2.5">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-2">
-          {isWorkoutTab && activeEx && (
-            <div className="grid grid-cols-3 gap-2">
-              <Button
-                size="sm"
-                color="secondary"
-                iconLeading={ArrowRight}
-                isDisabled={isAtVeryStart}
-                onPress={goPrevStep}
-                className="w-full"
-              >
-                {prevBtnLabel}
-              </Button>
+      {/* PERSISTENT BOTTOM DOCK WHEN WORKOUT IS ACTIVE: NAVIGATION + PER-SET REST TIMER */}
+      {isWorkoutActive && (
+        <footer className="shrink-0 border-t border-secondary bg-primary px-2.5 py-2 sm:px-4 sm:py-2.5">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-2">
+            {isWorkoutTab && activeEx && (
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  size="sm"
+                  color="secondary"
+                  iconLeading={ArrowRight}
+                  isDisabled={isAtVeryStart}
+                  onPress={goPrevStep}
+                  className="w-full"
+                >
+                  {prevBtnLabel}
+                </Button>
 
-              <Button
-                size="sm"
-                color="secondary"
-                iconLeading={Save01}
-                onPress={() => {
-                  setSaveFeedback(null);
-                  setSaveModalOpen(true);
+                <Button
+                  size="sm"
+                  color="secondary"
+                  iconLeading={Save01}
+                  onPress={() => {
+                    setSaveFeedback(null);
+                    setSaveModalOpen(true);
+                  }}
+                  className={`w-full ${
+                    totalDoneInView > 0
+                      ? 'bg-brand-primary_alt text-brand-secondary ring-utility-brand-300'
+                      : ''
+                  }`}
+                >
+                  סיים ושמור ({totalDoneInView}/{totalSetsInView})
+                </Button>
+
+                <Button
+                  size="sm"
+                  color="primary"
+                  iconTrailing={isAtVeryEnd ? Flag01 : ArrowLeft}
+                  onPress={goNextStep}
+                  className={`w-full ${
+                    isAtVeryEnd ? 'bg-bg-success-solid hover:bg-bg-success-solid' : ''
+                  }`}
+                >
+                  {nextBtnLabel}
+                </Button>
+              </div>
+            )}
+
+            {/* Per-Set Rest Watch + Live Progress Stats Row */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div
+                className={`flex items-center gap-1.5 rounded-lg px-2 py-1 ring-1 ${
+                  timerFinished
+                    ? 'bg-success-primary ring-utility-green-300'
+                    : 'bg-secondary_alt ring-secondary'
+                }`}
+              >
+                <span
+                  className={`flex items-center gap-1 font-mono text-xs font-bold sm:text-sm ${
+                    timerFinished ? 'text-success-primary' : 'text-primary'
+                  }`}
+                >
+                  {timerFinished ? (
+                    <CheckCircle className="size-3.5 shrink-0" />
+                  ) : (
+                    <Clock className="size-3.5 shrink-0 text-fg-brand-primary" />
+                  )}
+                  <span className="font-sans text-[11px] font-semibold text-tertiary">
+                    מנוחה לסט:
+                  </span>
+                  <span>{timerFinished ? 'המשך!' : formatTime(timerSeconds)}</span>
+                </span>
+
+                <Button
+                  size="xs"
+                  color={timerRunning ? 'primary-destructive' : 'primary'}
+                  onPress={toggleTimer}
+                  className="px-2.5 py-1 text-xs"
+                >
+                  {timerRunning ? 'עצור' : 'הפעל'}
+                </Button>
+                <Button
+                  size="xs"
+                  color="secondary"
+                  onPress={() => startTimer(60)}
+                  className="px-2 py-1 text-xs"
+                >
+                  60 שניות
+                </Button>
+                <Button
+                  size="xs"
+                  color="secondary"
+                  onPress={() => startTimer(90)}
+                  className="px-2 py-1 text-xs"
+                >
+                  90 שניות
+                </Button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (currentTab !== 'progress') selectMainTab('progress');
                 }}
-                className={`w-full ${
-                  totalDoneInView > 0
-                    ? 'bg-brand-primary_alt text-brand-secondary ring-utility-brand-300'
-                    : ''
-                }`}
+                className="cursor-pointer rounded-full transition hover:opacity-85"
               >
-                שמור ({totalDoneInView}/{totalSetsInView})
-              </Button>
-
-              <Button
-                size="sm"
-                color="primary"
-                iconTrailing={isAtVeryEnd ? Flag01 : ArrowLeft}
-                onPress={goNextStep}
-                className={`w-full ${isAtVeryEnd ? 'bg-bg-success-solid hover:bg-bg-success-solid' : ''}`}
-              >
-                {nextBtnLabel}
-              </Button>
+                <BadgeWithIcon size="sm" color="gray" type="modern" iconLeading={Award01}>
+                  {isWide
+                    ? `${totalSetsInView > 0 ? `סטים: ${totalDoneInView}/${totalSetsInView} • ` : ''}${progressStats.weekWorkouts} השבוע • ${progressStats.totalWorkouts} אימונים`
+                    : totalSetsInView > 0
+                    ? `${totalDoneInView}/${totalSetsInView} • ${progressStats.totalWorkouts} אימונים`
+                    : `${progressStats.totalWorkouts} אימונים`}
+                </BadgeWithIcon>
+              </button>
             </div>
-          )}
-
-          {/* Persistent Rest Watch + Stats Row */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div
-              className={`flex items-center gap-1.5 rounded-lg px-2 py-1 ring-1 ${
-                timerFinished
-                  ? 'bg-success-primary ring-utility-green-300'
-                  : 'bg-secondary_alt ring-secondary'
-              }`}
-            >
-              <span
-                className={`flex min-w-16 items-center gap-1 font-mono text-xs font-bold sm:text-sm ${
-                  timerFinished ? 'text-success-primary' : 'text-primary'
-                }`}
-              >
-                {timerFinished ? (
-                  <CheckCircle className="size-3.5 shrink-0" />
-                ) : (
-                  <Clock className="size-3.5 shrink-0 text-fg-brand-primary" />
-                )}
-                <span>{timerFinished ? 'המשך!' : formatTime(timerSeconds)}</span>
-              </span>
-
-              <Button
-                size="xs"
-                color={timerRunning ? 'primary-destructive' : 'primary'}
-                onPress={toggleTimer}
-                className="px-2.5 py-1 text-xs"
-              >
-                {timerRunning ? 'עצור' : 'הפעל'}
-              </Button>
-              <Button
-                size="xs"
-                color="secondary"
-                onPress={() => startTimer(60)}
-                className="px-2 py-1 text-xs"
-              >
-                60 שניות
-              </Button>
-              <Button
-                size="xs"
-                color="secondary"
-                onPress={() => startTimer(90)}
-                className="px-2 py-1 text-xs"
-              >
-                90 שניות
-              </Button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (currentTab !== 'progress') selectMainTab('progress');
-              }}
-              className="cursor-pointer rounded-full transition hover:opacity-85"
-            >
-              <BadgeWithIcon size="sm" color="gray" type="modern" iconLeading={Award01}>
-                {isWide
-                  ? `${totalSetsInView > 0 ? `סטים: ${totalDoneInView}/${totalSetsInView} • ` : ''}${progressStats.weekWorkouts} השבוע • ${progressStats.totalWorkouts} אימונים`
-                  : totalSetsInView > 0
-                  ? `${totalDoneInView}/${totalSetsInView} • ${progressStats.totalWorkouts} אימונים`
-                  : `${progressStats.totalWorkouts} אימונים`}
-              </BadgeWithIcon>
-            </button>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {/* MODALS (Untitled UI ModalOverlay + Modal + Dialog) */}
       <ExerciseSwitcherModal
@@ -1638,13 +1896,22 @@ export default function App(): React.ReactElement {
         timerRunning={timerRunning}
         timerFinished={timerFinished}
         timerSeconds={timerSeconds}
+        workoutElapsedSec={workoutElapsedSec}
         totalDoneInView={totalDoneInView}
         totalSetsInView={totalSetsInView}
         workoutNote={workoutNote}
         onChangeWorkoutNote={setWorkoutNote}
         saveFeedback={saveFeedback}
-        onClearSetCheckmarks={clearSetCheckmarks}
+        onDiscardWorkout={requestDiscardWorkout}
         onSaveWorkoutSession={handleSaveWorkoutSession}
+      />
+
+      <DiscardWorkoutModal
+        isOpen={discardModalOpen}
+        onClose={() => setDiscardModalOpen(false)}
+        workoutElapsedSec={workoutElapsedSec}
+        totalDoneInView={totalDoneInView}
+        onConfirmDiscard={performDiscardWorkout}
       />
     </div>
   );
