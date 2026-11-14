@@ -673,11 +673,11 @@ export default function App(): React.ReactElement {
   const fSemi = fontForWeight('semibold', fontsLoaded);
   const fBold = fontForWeight('bold', fontsLoaded);
 
-  const navTabs: { key: WorkoutTabKey; label: string }[] = [
-    { key: 'workoutA', label: 'אימון A: חזה, גב וזרועות' },
-    { key: 'workoutB', label: 'אימון B: כתפיים, גב וזרועות' },
-    { key: 'all', label: 'כל התרגילים' },
-    { key: 'calculator', label: '🔩 מחשבון פלטות' },
+  const navTabs: { key: WorkoutTabKey; label: string; mobileLabel: string }[] = [
+    { key: 'workoutA', label: 'אימון A: חזה, גב וזרועות', mobileLabel: 'אימון A' },
+    { key: 'workoutB', label: 'אימון B: כתפיים, גב וזרועות', mobileLabel: 'אימון B' },
+    { key: 'all', label: 'כל התרגילים', mobileLabel: 'כל התרגילים' },
+    { key: 'calculator', label: '🔩 מחשבון פלטות', mobileLabel: '🔩 פלטות' },
   ];
 
   const selectMainTab = (nextTab: WorkoutTabKey) => {
@@ -794,58 +794,89 @@ export default function App(): React.ReactElement {
       <View
         style={[
           styles.topShell,
+          !isWide && styles.topShellMobile,
           { backgroundColor: colors.card, borderBottomColor: colors.border },
         ]}
       >
         {/* Row 1: Compact Title + Sync + Utility Buttons */}
-        <View style={styles.topRow1}>
-          <View style={styles.topBrandTitleRow}>
-            <Text
-              numberOfLines={1}
-              style={[styles.compactTitle, { color: colors.foreground, fontFamily: fBold }]}
-            >
-              🤖 AI Trainer
-            </Text>
-            {isWide && (
-              <View style={[styles.compactSyncBadge, { backgroundColor: colors.primarySoft }]}>
-                <Text style={[styles.compactSyncText, { color: colors.primary, fontFamily: fSemi }]}>
-                  מאמן כוח חכם
-                </Text>
-              </View>
-            )}
-            <View
-              style={[
-                styles.compactSyncBadge,
-                {
-                  backgroundColor:
-                    syncStatus.mode === 'cloud' ? colors.successSoft : colors.secondary,
-                },
-              ]}
-            >
+        <View style={[styles.topRow1, !isWide && styles.topRow1Mobile]}>
+          <View style={[styles.topBrandTitleRow, !isWide && styles.topBrandTitleRowMobile]}>
+            <View style={styles.topBrandLeftGroup}>
               <Text
                 numberOfLines={1}
+                style={[styles.compactTitle, { color: colors.foreground, fontFamily: fBold }]}
+              >
+                🤖 AI Trainer
+              </Text>
+              {isWide && (
+                <View style={[styles.compactSyncBadge, { backgroundColor: colors.primarySoft }]}>
+                  <Text style={[styles.compactSyncText, { color: colors.primary, fontFamily: fSemi }]}>
+                    מאמן כוח חכם
+                  </Text>
+                </View>
+              )}
+              <View
                 style={[
-                  styles.compactSyncText,
+                  styles.compactSyncBadge,
                   {
-                    color:
-                      syncStatus.mode === 'cloud' ? colors.success : colors.mutedForeground,
-                    fontFamily: fSemi,
+                    backgroundColor:
+                      syncStatus.mode === 'cloud' ? colors.successSoft : colors.secondary,
                   },
                 ]}
               >
-                ☁️ {syncStatus.message}
-              </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.compactSyncText,
+                    {
+                      color:
+                        syncStatus.mode === 'cloud' ? colors.success : colors.mutedForeground,
+                      fontFamily: fSemi,
+                    },
+                  ]}
+                >
+                  {isWide
+                    ? `☁️ ${syncStatus.message}`
+                    : syncStatus.mode === 'cloud'
+                    ? '☁️ מסונכרן'
+                    : syncStatus.mode === 'connecting'
+                    ? '☁️ מתחבר...'
+                    : '📱 מקומי'}
+                </Text>
+              </View>
             </View>
+
+            {!isWide &&
+              Platform.OS === 'web' &&
+              isFirebaseConfigured() &&
+              (!firebaseUser || firebaseUser.isAnonymous) && (
+                <Pressable
+                  onPress={handleGoogleSignIn}
+                  style={[
+                    styles.utilityBtnCompact,
+                    { backgroundColor: colors.background, borderColor: colors.primary },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.utilityBtnText,
+                      { color: colors.primary, fontFamily: fSemi },
+                    ]}
+                  >
+                    🔗 Google
+                  </Text>
+                </Pressable>
+              )}
           </View>
 
-          <View style={styles.topUtilityRow}>
+          <View style={[styles.topUtilityRow, !isWide && styles.topUtilityRowMobile]}>
             {/* Dedicated Show My Progress button */}
             <Pressable
               onPress={() =>
                 selectMainTab(currentTab === 'progress' ? lastNonProgressTab : 'progress')
               }
               style={[
-                styles.dedicatedActionBtn,
+                isWide ? styles.dedicatedActionBtn : styles.dedicatedActionBtnMobile,
                 {
                   backgroundColor:
                     currentTab === 'progress' ? colors.primary : colors.primarySoft,
@@ -854,6 +885,7 @@ export default function App(): React.ReactElement {
               ]}
             >
               <Text
+                numberOfLines={1}
                 style={[
                   styles.dedicatedActionText,
                   {
@@ -863,7 +895,9 @@ export default function App(): React.ReactElement {
                   },
                 ]}
               >
-                📈 ההתקדמות שלי ({sortedHistoryDesc.length})
+                {isWide
+                  ? `📈 ההתקדמות שלי (${sortedHistoryDesc.length})`
+                  : `📈 ההתקדמות שלי (${sortedHistoryDesc.length})`}
               </Text>
             </Pressable>
 
@@ -871,7 +905,7 @@ export default function App(): React.ReactElement {
             <Pressable
               onPress={() => setGuideModalOpen(true)}
               style={[
-                styles.dedicatedActionBtn,
+                isWide ? styles.dedicatedActionBtn : styles.dedicatedActionBtnMobile,
                 {
                   backgroundColor: guideModalOpen ? colors.primary : colors.secondary,
                   borderColor: guideModalOpen ? colors.primary : colors.border,
@@ -879,6 +913,7 @@ export default function App(): React.ReactElement {
               ]}
             >
               <Text
+                numberOfLines={1}
                 style={[
                   styles.dedicatedActionText,
                   {
@@ -896,18 +931,20 @@ export default function App(): React.ReactElement {
             <Pressable
               onPress={() => setAnimPaused((p) => !p)}
               style={[
-                styles.utilityBtn,
+                isWide ? styles.utilityBtn : styles.utilityBtnCompact,
                 { backgroundColor: colors.background, borderColor: colors.border },
               ]}
             >
               <Text
+                numberOfLines={1}
                 style={[styles.utilityBtnText, { color: colors.foreground, fontFamily: fMed }]}
               >
-                {animPaused ? '▶ אנימציה' : '⏸ אנימציה'}
+                {isWide ? (animPaused ? '▶ אנימציה' : '⏸ אנימציה') : animPaused ? '▶' : '⏸'}
               </Text>
             </Pressable>
 
-            {Platform.OS === 'web' &&
+            {isWide &&
+              Platform.OS === 'web' &&
               isFirebaseConfigured() &&
               (!firebaseUser || firebaseUser.isAnonymous) && (
                 <Pressable
@@ -930,43 +967,77 @@ export default function App(): React.ReactElement {
           </View>
         </View>
 
-        {/* Row 2: Horizontal Navigation Tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.topTabsScroll}
-        >
-          {navTabs.map((t) => {
-            const active = currentTab === t.key;
-            return (
-              <Pressable
-                key={t.key}
-                onPress={() => selectMainTab(t.key)}
-                style={[
-                  styles.tabBtnCompact,
-                  {
-                    backgroundColor: active ? colors.primary : colors.background,
-                    borderColor: active ? colors.primary : colors.border,
-                  },
-                ]}
-              >
-                <Text
+        {/* Row 2: Main Navigation Tabs */}
+        {isWide ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.topTabsScroll}
+          >
+            {navTabs.map((t) => {
+              const active = currentTab === t.key;
+              return (
+                <Pressable
+                  key={t.key}
+                  onPress={() => selectMainTab(t.key)}
                   style={[
-                    styles.tabBtnCompactText,
+                    styles.tabBtnCompact,
                     {
-                      color: active ? colors.primaryForeground : colors.foreground,
-                      fontFamily: fSemi,
+                      backgroundColor: active ? colors.primary : colors.background,
+                      borderColor: active ? colors.primary : colors.border,
                     },
                   ]}
                 >
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.tabBtnCompactText,
+                      {
+                        color: active ? colors.primaryForeground : colors.foreground,
+                        fontFamily: fSemi,
+                      },
+                    ]}
+                  >
+                    {t.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : (
+          <View style={styles.mobileNavTabsRow}>
+            {navTabs.map((t) => {
+              const active = currentTab === t.key;
+              return (
+                <Pressable
+                  key={t.key}
+                  onPress={() => selectMainTab(t.key)}
+                  style={[
+                    styles.mobileTabBtnCompact,
+                    {
+                      backgroundColor: active ? colors.primary : colors.background,
+                      borderColor: active ? colors.primary : colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.mobileTabBtnCompactText,
+                      {
+                        color: active ? colors.primaryForeground : colors.foreground,
+                        fontFamily: fSemi,
+                      },
+                    ]}
+                  >
+                    {t.mobileLabel}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
-        {/* Row 3 (Muscle filter if 'all' + Exercise Dropdown Switcher in workout tabs) */}
+        {/* Row 3 (Muscle filter if 'all' + Exercise Dropdown Switcher on wide screens) */}
         {currentTab === 'all' && (
           <ScrollView
             horizontal
@@ -1008,7 +1079,7 @@ export default function App(): React.ReactElement {
           </ScrollView>
         )}
 
-        {isWorkoutTab && visibleExercises.length > 0 && activeEx && (() => {
+        {isWide && isWorkoutTab && visibleExercises.length > 0 && activeEx && (() => {
           const { doneCount, effectiveSets, allDone } = getExerciseDoneStats(activeEx);
           return (
             <View style={styles.dropdownRowWrap}>
@@ -1069,7 +1140,7 @@ export default function App(): React.ReactElement {
                       { color: colors.foreground, fontFamily: fBold },
                     ]}
                   >
-                    {isWide ? activeEx.name : activeEx.shortName}
+                    {activeEx.name}
                   </Text>
                 </View>
 
@@ -1128,7 +1199,12 @@ export default function App(): React.ReactElement {
 
       {/* NON-SCROLLING FULLSCREEN WORKOUT STAGE (1 exercise & 1 set at a time, capped at page height) */}
       {isWorkoutTab && (
-        <View style={styles.fullscreenWorkoutStage}>
+        <View
+          style={[
+            styles.fullscreenWorkoutStage,
+            !isWide && styles.fullscreenWorkoutStageMobile,
+          ]}
+        >
           {activeEx ? (
             (() => {
               const ex = activeEx;
@@ -1147,7 +1223,12 @@ export default function App(): React.ReactElement {
               const trendSummary = getExerciseTrendSummary(ex.id, sortedHistoryDesc, colors);
 
               const renderSingleSetWorkspace = () => (
-                <View style={styles.singleSetWorkspace}>
+                <View
+                  style={[
+                    styles.singleSetWorkspace,
+                    !isWide && styles.singleSetWorkspaceMobile,
+                  ]}
+                >
                   {/* Set Switcher Pills + Optional Barbell Toggle */}
                   <View style={styles.setSwitcherBar}>
                     <ScrollView
@@ -1241,6 +1322,7 @@ export default function App(): React.ReactElement {
                   <View
                     style={[
                       styles.activeSetControlBox,
+                      !isWide && styles.activeSetControlBoxMobile,
                       {
                         backgroundColor: colors.background,
                         borderColor: entry.done ? colors.success : colors.border,
@@ -1503,7 +1585,7 @@ export default function App(): React.ReactElement {
                       fontsLoaded={fontsLoaded}
                     />
                   ) : (
-                    <View style={styles.dualVisualRow}>
+                    <View style={[styles.dualVisualRow, styles.dualVisualRowMobile]}>
                       <ExerciseAnimation
                         compact
                         micro
@@ -1528,11 +1610,12 @@ export default function App(): React.ReactElement {
                   <View
                     style={[
                       styles.plateRecipeBarCompact,
+                      !isWide && styles.plateRecipeBarMobile,
                       { backgroundColor: colors.background, borderColor: colors.border },
                     ]}
                   >
                     <Text
-                      numberOfLines={2}
+                      numberOfLines={isWide ? 2 : 1}
                       style={[
                         styles.plateRecipeTextCompact,
                         { color: colors.foreground, fontFamily: fMed },
@@ -1540,7 +1623,9 @@ export default function App(): React.ReactElement {
                     >
                       🔩{' '}
                       <Text style={{ color: colors.primary, fontFamily: fBold }}>
-                        איך מרכיבים {setCfg.totalWeight} קילוגרם:{' '}
+                        {isWide
+                          ? `איך מרכיבים ${setCfg.totalWeight} קילוגרם: `
+                          : `הרכבת ${setCfg.totalWeight} קילוגרם: `}
                       </Text>
                       {describeConfigSetup(setCfg, effectiveMode)}
                     </Text>
@@ -1641,86 +1726,220 @@ export default function App(): React.ReactElement {
                 </View>
               );
 
+              const { doneCount: exDoneCount, allDone: exAllDone } = getExerciseDoneStats(ex);
+              const shortEquipLabel =
+                effectiveMode === 'pair'
+                  ? '2 משקולות'
+                  : effectiveMode === 'single'
+                  ? 'משקולת 1'
+                  : effectiveMode === 'barbell'
+                  ? 'מוט ארוך'
+                  : effectiveMode === 'platePair'
+                  ? '2 פלטות'
+                  : 'משקל גוף';
+              const repMatch = ex.reps.match(/\d+\s*(?:עד|-)\s*\d+/);
+              const shortRepsLabel = repMatch
+                ? `${repMatch[0].replace(/\s*עד\s*/, '–')} חזרות`
+                : `${ex.defaultReps} חזרות`;
+              const conciseMetaText = `${ex.muscle} • ${effectiveSets} סטים • ${shortRepsLabel} • ${shortEquipLabel}`;
+
               return (
                 <View
                   key={ex.id}
                   style={[
                     styles.fullscreenExCard,
+                    !isWide && styles.fullscreenExCardMobile,
                     { backgroundColor: colors.card, borderColor: colors.border },
                   ]}
                 >
-                  {/* Compact Single-Line Exercise Header */}
-                  <View style={[styles.exHeaderCompact, { borderBottomColor: colors.border }]}>
-                    <View style={styles.exHeaderTitleGroup}>
-                      <ExerciseGifIcon
-                        exerciseId={ex.id}
-                        size={46}
-                        active
-                        borderColor={colors.border}
-                        activeBorderColor="#a3e635"
-                      />
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.exTitleCompact, { color: colors.foreground, fontFamily: fBold }]}
+                  {/* Exercise Header: Wide standard OR unified mobile switcher + rest tag */}
+                  {isWide ? (
+                    <View style={[styles.exHeaderCompact, { borderBottomColor: colors.border }]}>
+                      <View style={styles.exHeaderTitleGroup}>
+                        <ExerciseGifIcon
+                          exerciseId={ex.id}
+                          size={46}
+                          active
+                          borderColor={colors.border}
+                          activeBorderColor="#a3e635"
+                        />
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text
+                            numberOfLines={1}
+                            style={[styles.exTitleCompact, { color: colors.foreground, fontFamily: fBold }]}
+                          >
+                            {idx + 1}. {ex.name}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.exMetaCompact,
+                              { color: colors.mutedForeground, fontFamily: fReg },
+                            ]}
+                          >
+                            {conciseMetaText}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.headerBadgesCol}>
+                        <View style={[styles.pillBadge, { backgroundColor: colors.primarySoft }]}>
+                          <Text style={[styles.pillBadgeText, { color: colors.primary, fontFamily: fBold }]}>
+                            סט {setNum} מתוך {effectiveSets}
+                          </Text>
+                        </View>
+                        <Pressable
+                          onPress={() => startTimer(ex.restSec)}
+                          style={[
+                            styles.restTagBadge,
+                            {
+                              backgroundColor: scheme === 'dark' ? '#422006' : '#fef3c7',
+                              borderColor: scheme === 'dark' ? '#f59e0b' : '#d97706',
+                            },
+                          ]}
                         >
-                          {idx + 1}. {isWide ? ex.name : ex.shortName}
-                        </Text>
+                          <Text
+                            style={[
+                              styles.restTagText,
+                              { color: scheme === 'dark' ? '#fbbf24' : '#b45309', fontFamily: fBold },
+                            ]}
+                          >
+                            ⏳ מנוחה: {ex.restSec} שניות
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={[styles.exHeaderMobileWrap, { borderBottomColor: colors.border }]}>
+                      <View style={styles.mobileCardSwitcherRow}>
+                        <Pressable
+                          disabled={safeExIdx <= 0}
+                          onPress={() => goToExercise(safeExIdx - 1, 0)}
+                          style={[
+                            styles.mobileCardArrowBtn,
+                            {
+                              backgroundColor: colors.background,
+                              borderColor: colors.border,
+                              opacity: safeExIdx <= 0 ? 0.35 : 1,
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fBold }]}>
+                            →
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={() => setExerciseDropdownOpen(true)}
+                          style={[
+                            styles.mobileCardDropdownPill,
+                            {
+                              backgroundColor: colors.background,
+                              borderColor: exerciseDropdownOpen ? colors.primary : colors.border,
+                            },
+                          ]}
+                        >
+                          <ExerciseGifIcon
+                            exerciseId={ex.id}
+                            size={34}
+                            active
+                            borderColor={colors.border}
+                            activeBorderColor="#a3e635"
+                          />
+                          <View
+                            style={[
+                              styles.dropdownCountBadge,
+                              { backgroundColor: exAllDone ? colors.success : colors.primary },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.dropdownCountText,
+                                { color: colors.primaryForeground, fontFamily: fBold },
+                              ]}
+                            >
+                              {safeExIdx + 1}/{visibleExercises.length}
+                            </Text>
+                          </View>
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.mobileCardDropdownTitle,
+                              { color: colors.foreground, fontFamily: fBold },
+                            ]}
+                          >
+                            {ex.shortName}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.mobileCardDropdownArrow,
+                              { color: colors.primary, fontFamily: fBold },
+                            ]}
+                          >
+                            {exDoneCount}/{effectiveSets} ▾
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          disabled={safeExIdx >= visibleExercises.length - 1}
+                          onPress={() => goToExercise(safeExIdx + 1, 0)}
+                          style={[
+                            styles.mobileCardArrowBtn,
+                            {
+                              backgroundColor: colors.background,
+                              borderColor: colors.border,
+                              opacity: safeExIdx >= visibleExercises.length - 1 ? 0.35 : 1,
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.smallBtnText, { color: colors.foreground, fontFamily: fBold }]}>
+                            ←
+                          </Text>
+                        </Pressable>
+                      </View>
+
+                      <View style={styles.mobileCardMetaRow}>
                         <Text
                           numberOfLines={1}
                           style={[
-                            styles.exMetaCompact,
+                            styles.exMetaMobileCompact,
                             { color: colors.mutedForeground, fontFamily: fReg },
                           ]}
                         >
-                          {(() => {
-                            const shortEquipLabel =
-                              effectiveMode === 'pair'
-                                ? '2 משקולות'
-                                : effectiveMode === 'single'
-                                ? 'משקולת 1'
-                                : effectiveMode === 'barbell'
-                                ? 'מוט ארוך'
-                                : effectiveMode === 'platePair'
-                                ? '2 פלטות'
-                                : 'משקל גוף';
-                            const repMatch = ex.reps.match(/\d+\s*(?:עד|-)\s*\d+/);
-                            const shortRepsLabel = repMatch
-                              ? `${repMatch[0].replace(/\s*עד\s*/, '–')} חזרות`
-                              : `${ex.defaultReps} חזרות`;
-                            return `${ex.muscle} • ${effectiveSets} סטים • ${shortRepsLabel} • ${shortEquipLabel}`;
-                          })()}
+                          {conciseMetaText}
                         </Text>
-                      </View>
-                    </View>
 
-                    <View style={styles.headerBadgesCol}>
-                      <View style={[styles.pillBadge, { backgroundColor: colors.primarySoft }]}>
-                        <Text style={[styles.pillBadgeText, { color: colors.primary, fontFamily: fBold }]}>
-                          סט {setNum} מתוך {effectiveSets}
-                        </Text>
+                        <View style={styles.mobileMetaTagsGroup}>
+                          <View style={[styles.compactPillTag, { backgroundColor: colors.primarySoft }]}>
+                            <Text
+                              style={[styles.compactPillTagText, { color: colors.primary, fontFamily: fBold }]}
+                            >
+                              סט {setNum}/{effectiveSets}
+                            </Text>
+                          </View>
+                          <Pressable
+                            onPress={() => startTimer(ex.restSec)}
+                            style={[
+                              styles.restTagBadgeCompact,
+                              {
+                                backgroundColor: scheme === 'dark' ? '#422006' : '#fef3c7',
+                                borderColor: scheme === 'dark' ? '#f59e0b' : '#d97706',
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.restTagTextCompact,
+                                { color: scheme === 'dark' ? '#fbbf24' : '#b45309', fontFamily: fBold },
+                              ]}
+                            >
+                              ⏳ מנוחה: {ex.restSec} שניות
+                            </Text>
+                          </Pressable>
+                        </View>
                       </View>
-                      <Pressable
-                        onPress={() => startTimer(ex.restSec)}
-                        style={[
-                          styles.restTagBadge,
-                          {
-                            backgroundColor: scheme === 'dark' ? '#422006' : '#fef3c7',
-                            borderColor: scheme === 'dark' ? '#f59e0b' : '#d97706',
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.restTagText,
-                            { color: scheme === 'dark' ? '#fbbf24' : '#b45309', fontFamily: fBold },
-                          ]}
-                        >
-                          ⏳ מנוחה: {ex.restSec} שניות
-                        </Text>
-                      </Pressable>
                     </View>
-                  </View>
+                  )}
 
                   {isWide ? (
                     <>
@@ -1740,24 +1959,26 @@ export default function App(): React.ReactElement {
                     </>
                   ) : (
                     <>
-                      {/* Mobile Compact: 1-Line Clickable Trend Strip + 2-Tab Switcher + Active Pane */}
-                      <Pressable
-                        onPress={() => setMobilePane('trend')}
-                        style={[
-                          styles.mobileTrendBanner,
-                          { backgroundColor: trendSummary.trendBg, borderColor: colors.border },
-                        ]}
-                      >
-                        <Text
-                          numberOfLines={1}
+                      {/* Mobile Compact: 1-Line Clickable Trend Strip (only when history exists) + 2-Tab Switcher */}
+                      {trendSummary.sessions.length > 0 && (
+                        <Pressable
+                          onPress={() => setMobilePane('trend')}
                           style={[
-                            styles.mobileTrendText,
-                            { color: trendSummary.trendFg, fontFamily: fSemi },
+                            styles.mobileTrendBanner,
+                            { backgroundColor: trendSummary.trendBg, borderColor: colors.border },
                           ]}
                         >
-                          {trendSummary.shortLine}
-                        </Text>
-                      </Pressable>
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.mobileTrendText,
+                              { color: trendSummary.trendFg, fontFamily: fSemi },
+                            ]}
+                          >
+                            {trendSummary.shortLine}
+                          </Text>
+                        </Pressable>
+                      )}
 
                       <View style={styles.mobilePaneTabsRow}>
                         {(
@@ -2643,17 +2864,25 @@ export default function App(): React.ReactElement {
       <View
         style={[
           styles.bottomDock,
+          !isWide && styles.bottomDockMobile,
           { backgroundColor: colors.card, borderTopColor: colors.border },
         ]}
       >
         {isWorkoutTab && activeEx && (
-          <View style={[styles.bottomNavRow, { borderBottomColor: colors.border }]}>
+          <View
+            style={[
+              styles.bottomNavRow,
+              !isWide && styles.bottomNavRowMobile,
+              { borderBottomColor: colors.border },
+            ]}
+          >
             {/* In RTL row-reverse: first child renders on Right (Previous), middle Save, last on Left (Next / Finish) */}
             <Pressable
               disabled={isAtVeryStart}
               onPress={goPrevStep}
               style={[
                 styles.bottomNavBtn,
+                !isWide && styles.bottomNavBtnMobile,
                 {
                   backgroundColor: colors.background,
                   borderColor: colors.border,
@@ -2673,6 +2902,7 @@ export default function App(): React.ReactElement {
               }}
               style={[
                 styles.bottomSaveBtn,
+                !isWide && styles.bottomNavBtnMobile,
                 {
                   backgroundColor:
                     totalDoneInView > 0 ? colors.primarySoft : colors.background,
@@ -2697,6 +2927,7 @@ export default function App(): React.ReactElement {
               onPress={goNextStep}
               style={[
                 styles.bottomNavBtn,
+                !isWide && styles.bottomNavBtnMobile,
                 {
                   backgroundColor: isAtVeryEnd ? colors.success : colors.primary,
                   borderColor: isAtVeryEnd ? colors.success : colors.primary,
@@ -2716,10 +2947,11 @@ export default function App(): React.ReactElement {
         )}
 
         {/* Persistent Rest Watch + Live Workout Stats (Visible across the entire app) */}
-        <View style={styles.watchStatsBar}>
+        <View style={[styles.watchStatsBar, !isWide && styles.watchStatsBarMobile]}>
           <View
             style={[
               styles.watchCluster,
+              !isWide && styles.watchClusterMobile,
               {
                 backgroundColor: timerFinished ? colors.successSoft : colors.background,
                 borderColor: timerFinished ? colors.success : colors.border,
@@ -2727,8 +2959,10 @@ export default function App(): React.ReactElement {
             ]}
           >
             <Text
+              numberOfLines={1}
               style={[
                 styles.compactTimerVal,
+                !isWide && styles.compactTimerValMobile,
                 {
                   color: timerFinished ? colors.success : colors.foreground,
                   fontFamily: fBold,
@@ -2741,6 +2975,7 @@ export default function App(): React.ReactElement {
               onPress={toggleTimer}
               style={[
                 styles.miniTimerBtn,
+                !isWide && styles.miniTimerBtnMobile,
                 { backgroundColor: timerRunning ? colors.danger : colors.primary },
               ]}
             >
@@ -2755,7 +2990,11 @@ export default function App(): React.ReactElement {
             </Pressable>
             <Pressable
               onPress={() => startTimer(60)}
-              style={[styles.miniTimerBtn, { backgroundColor: colors.secondary }]}
+              style={[
+                styles.miniTimerBtn,
+                !isWide && styles.miniTimerBtnMobile,
+                { backgroundColor: colors.secondary },
+              ]}
             >
               <Text
                 style={[
@@ -2768,7 +3007,11 @@ export default function App(): React.ReactElement {
             </Pressable>
             <Pressable
               onPress={() => startTimer(90)}
-              style={[styles.miniTimerBtn, { backgroundColor: colors.secondary }]}
+              style={[
+                styles.miniTimerBtn,
+                !isWide && styles.miniTimerBtnMobile,
+                { backgroundColor: colors.secondary },
+              ]}
             >
               <Text
                 style={[
@@ -2785,40 +3028,64 @@ export default function App(): React.ReactElement {
             onPress={() => {
               if (currentTab !== 'progress') selectMainTab('progress');
             }}
-            style={styles.statsCluster}
+            style={[styles.statsCluster, !isWide && styles.statsClusterMobile]}
           >
-            {totalSetsInView > 0 && (
+            {isWide ? (
+              <>
+                {totalSetsInView > 0 && (
+                  <View
+                    style={[
+                      styles.bottomStatPill,
+                      { backgroundColor: colors.background, borderColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.bottomStatText,
+                        { color: colors.foreground, fontFamily: fSemi },
+                      ]}
+                    >
+                      סטים: {totalDoneInView}/{totalSetsInView}
+                    </Text>
+                  </View>
+                )}
+                <View
+                  style={[
+                    styles.bottomStatPill,
+                    { backgroundColor: colors.secondary, borderColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.bottomStatText,
+                      { color: colors.secondaryForeground, fontFamily: fSemi },
+                    ]}
+                  >
+                    🔥 {progressStats.weekWorkouts} השבוע • {progressStats.totalWorkouts} אימונים
+                  </Text>
+                </View>
+              </>
+            ) : (
               <View
                 style={[
                   styles.bottomStatPill,
-                  { backgroundColor: colors.background, borderColor: colors.border },
+                  styles.bottomStatPillMobile,
+                  { backgroundColor: colors.secondary, borderColor: colors.border },
                 ]}
               >
                 <Text
+                  numberOfLines={1}
                   style={[
                     styles.bottomStatText,
-                    { color: colors.foreground, fontFamily: fSemi },
+                    { color: colors.secondaryForeground, fontFamily: fSemi },
                   ]}
                 >
-                  סטים: {totalDoneInView}/{totalSetsInView}
+                  {totalSetsInView > 0
+                    ? `✓ ${totalDoneInView}/${totalSetsInView} • 🔥 ${progressStats.totalWorkouts}`
+                    : `🔥 ${progressStats.totalWorkouts} אימונים`}
                 </Text>
               </View>
             )}
-            <View
-              style={[
-                styles.bottomStatPill,
-                { backgroundColor: colors.secondary, borderColor: colors.border },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.bottomStatText,
-                  { color: colors.secondaryForeground, fontFamily: fSemi },
-                ]}
-              >
-                🔥 {progressStats.weekWorkouts} השבוע • {progressStats.totalWorkouts} אימונים
-              </Text>
-            </View>
           </Pressable>
         </View>
       </View>
@@ -3933,7 +4200,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 9,
     paddingHorizontal: 6,
-    paddingVertical: 6,
+    paddingVertical: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4448,16 +4715,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   weightDisplayPill: {
-    minWidth: 96,
+    minWidth: 84,
     height: 30,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepperInputSmall: {
-    width: 48,
+    width: 42,
     height: 30,
     borderRadius: 8,
     borderWidth: 1,
@@ -4619,8 +4886,8 @@ const styles = StyleSheet.create({
   },
   stepsModalTriggerBtn: {
     flexGrow: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 9,
     borderWidth: 1,
     alignItems: 'center',
@@ -4628,11 +4895,217 @@ const styles = StyleSheet.create({
   },
   videoQuickChip: {
     flexGrow: 1,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: 9,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topShellMobile: {
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 6,
+    gap: 5,
+  },
+  topRow1Mobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 5,
+  },
+  topBrandTitleRowMobile: {
+    width: '100%',
+    flexWrap: 'nowrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 6,
+  },
+  topBrandLeftGroup: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
+  utilityBtnCompact: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topUtilityRowMobile: {
+    width: '100%',
+    flexWrap: 'nowrap',
+    gap: 5,
+  },
+  dedicatedActionBtnMobile: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 9,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileNavTabsRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 5,
+    width: '100%',
+  },
+  mobileTabBtnCompact: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileTabBtnCompactText: {
+    fontSize: 11,
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
+  fullscreenWorkoutStageMobile: {
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+  },
+  fullscreenExCardMobile: {
+    padding: 7,
+    gap: 5,
+  },
+  exHeaderMobileWrap: {
+    borderBottomWidth: 1,
+    paddingBottom: 5,
+    gap: 4,
+  },
+  mobileCardSwitcherRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 5,
+  },
+  mobileCardArrowBtn: {
+    width: 30,
+    height: 36,
+    borderWidth: 1,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileCardDropdownPill: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minHeight: 38,
+  },
+  mobileCardDropdownTitle: {
+    flex: 1,
+    fontSize: 13,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  mobileCardDropdownArrow: {
+    fontSize: 11,
+    writingDirection: 'rtl',
+  },
+  mobileCardMetaRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  exMetaMobileCompact: {
+    flex: 1,
+    fontSize: 10.5,
+    textAlign: 'right',
+    writingDirection: 'rtl',
+  },
+  mobileMetaTagsGroup: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactPillTag: {
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  compactPillTagText: {
+    fontSize: 10.5,
+    writingDirection: 'rtl',
+  },
+  restTagBadgeCompact: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  restTagTextCompact: {
+    fontSize: 10.5,
+    writingDirection: 'rtl',
+  },
+  singleSetWorkspaceMobile: {
+    gap: 5,
+  },
+  activeSetControlBoxMobile: {
+    padding: 6,
+    gap: 5,
+  },
+  dualVisualRowMobile: {
+    minHeight: 145,
+  },
+  plateRecipeBarMobile: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  bottomDockMobile: {
+    paddingHorizontal: 8,
+    paddingTop: 5,
+    paddingBottom: 6,
+    gap: 5,
+  },
+  bottomNavRowMobile: {
+    paddingBottom: 5,
+    gap: 6,
+  },
+  bottomNavBtnMobile: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    minWidth: 78,
+  },
+  watchStatsBarMobile: {
+    flexWrap: 'nowrap',
+    gap: 5,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  watchClusterMobile: {
+    flexShrink: 1,
+    flexWrap: 'nowrap',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  compactTimerValMobile: {
+    fontSize: 12.5,
+  },
+  miniTimerBtnMobile: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  statsClusterMobile: {
+    flexShrink: 0,
+    flexWrap: 'nowrap',
+  },
+  bottomStatPillMobile: {
+    paddingHorizontal: 7,
+    paddingVertical: 4,
   },
 });

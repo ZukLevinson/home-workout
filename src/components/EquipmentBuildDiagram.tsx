@@ -386,16 +386,12 @@ export default function EquipmentBuildDiagram({
 
   let headerCaption = '';
   if (micro) {
-    if (mode === 'pair') {
-      headerCaption = `${cfg.totalWeight} קילוגרם למשקולת`;
-    } else if (mode === 'single') {
+    if (mode === 'pair' || mode === 'single' || mode === 'platePair') {
       headerCaption = `${cfg.totalWeight} קילוגרם`;
     } else if (mode === 'barbell') {
       headerCaption = `מוט ${cfg.totalWeight} קילוגרם`;
-    } else if (mode === 'platePair') {
-      headerCaption = `פלטה ${cfg.totalWeight} קילוגרם`;
     } else {
-      headerCaption = cfg.totalWeight === 0 ? 'משקל גוף' : `פלטה ${cfg.totalWeight} קילוגרם`;
+      headerCaption = cfg.totalWeight === 0 ? 'משקל גוף' : `${cfg.totalWeight} קילוגרם`;
     }
   } else if (mode === 'pair') {
     headerCaption = `איור הרכבה: 2 משקולות יד שוות (${cfg.totalWeight} קילוגרם כל אחת)`;
