@@ -315,6 +315,7 @@ export default function EquipmentBuildDiagram({
   paused,
   colors,
   fontsLoaded,
+  compact = false,
 }) {
   const [phaseMs, setPhaseMs] = useState(0);
   const startRef = useRef(Date.now());
@@ -375,11 +376,13 @@ export default function EquipmentBuildDiagram({
     <View
       style={[
         styles.wrapper,
+        compact && styles.wrapperCompact,
         { backgroundColor: colors.background, borderColor: colors.border },
       ]}
     >
       <View style={styles.topBar}>
         <Text
+          numberOfLines={1}
           style={[
             styles.captionText,
             { color: colors.foreground, fontFamily: fontForWeight('semibold', fontsLoaded) },
@@ -405,8 +408,13 @@ export default function EquipmentBuildDiagram({
         </Pressable>
       </View>
 
-      <View style={styles.svgContainer}>
-        <Svg viewBox="0 0 360 124" width="100%" height={122}>
+      <View style={[styles.svgContainer, compact && styles.svgContainerCompact]}>
+        <Svg
+          viewBox="0 0 360 124"
+          width="100%"
+          height={compact ? '100%' : 122}
+          preserveAspectRatio="xMidYMid meet"
+        >
           {mode === 'pair' && (
             <G>
               {/* Dumbbell 1 (Left) */}
@@ -598,6 +606,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 4,
   },
+  wrapperCompact: {
+    flex: 1,
+    minHeight: 110,
+    paddingVertical: 6,
+  },
   topBar: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
@@ -624,5 +637,11 @@ const styles = StyleSheet.create({
     height: 122,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  svgContainerCompact: {
+    flex: 1,
+    height: undefined,
+    minHeight: 82,
+    maxHeight: 168,
   },
 });

@@ -421,7 +421,13 @@ function computeFrame(animKey, ms, colors) {
   }
 }
 
-export default function ExerciseAnimation({ exercise, paused, colors, fontsLoaded }) {
+export default function ExerciseAnimation({
+  exercise,
+  paused,
+  colors,
+  fontsLoaded,
+  compact = false,
+}) {
   const [subIdx, setSubIdx] = useState(0);
   const [nowMs, setNowMs] = useState(1200);
 
@@ -441,7 +447,13 @@ export default function ExerciseAnimation({ exercise, paused, colors, fontsLoade
   const frame = computeFrame(activeKey, nowMs, colors);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.container,
+        compact && styles.containerCompact,
+        { backgroundColor: colors.background, borderColor: colors.border },
+      ]}
+    >
       {exercise.animKeys.length > 1 && (
         <View style={styles.subToggleRow}>
           {exercise.animLabels.map((lbl, idx) => {
@@ -496,8 +508,13 @@ export default function ExerciseAnimation({ exercise, paused, colors, fontsLoade
         </View>
       </View>
 
-      <View style={styles.svgWrap}>
-        <Svg viewBox="0 0 280 168" width="100%" height={164}>
+      <View style={[styles.svgWrap, compact && styles.svgWrapCompact]}>
+        <Svg
+          viewBox="0 0 280 168"
+          width="100%"
+          height={compact ? '100%' : 164}
+          preserveAspectRatio="xMidYMid meet"
+        >
           {frame.elements}
         </Svg>
       </View>
@@ -529,6 +546,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 14,
     padding: 12,
+  },
+  containerCompact: {
+    flex: 1,
+    padding: 10,
+    minHeight: 165,
   },
   subToggleRow: {
     flexDirection: 'row-reverse',
@@ -574,6 +596,12 @@ const styles = StyleSheet.create({
     height: 164,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  svgWrapCompact: {
+    flex: 1,
+    height: undefined,
+    minHeight: 96,
+    maxHeight: 195,
   },
   metaFooter: {
     borderTopWidth: 1,

@@ -7,18 +7,7 @@ function roundWeight(val) {
   return Math.round((Number(val) || 0) * 100) / 100;
 }
 
-export default function ExerciseTrendCard({
-  exerciseId,
-  workoutHistory,
-  liveBestWeight,
-  colors,
-  fontsLoaded,
-}) {
-  const fReg = fontForWeight('regular', fontsLoaded);
-  const fMed = fontForWeight('medium', fontsLoaded);
-  const fSemi = fontForWeight('semibold', fontsLoaded);
-  const fBold = fontForWeight('bold', fontsLoaded);
-
+export function getExerciseTrendSummary(exerciseId, workoutHistory, colors) {
   const chronological = [...(workoutHistory || [])].sort(
     (a, b) => (a.createdAtMs || 0) - (b.createdAtMs || 0)
   );
@@ -46,30 +35,15 @@ export default function ExerciseTrendCard({
   });
 
   if (sessions.length === 0) {
-    return (
-      <View
-        style={[
-          styles.card,
-          { backgroundColor: colors.background, borderColor: colors.border },
-        ]}
-      >
-        <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: colors.foreground, fontFamily: fBold }]}>
-            📊 מה עשית בפעם הקודמת ומגמת התקדמות
-          </Text>
-          <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
-            <Text
-              style={[styles.badgeText, { color: colors.secondaryForeground, fontFamily: fSemi }]}
-            >
-              🆕 אין היסטוריה שמורה עדיין
-            </Text>
-          </View>
-        </View>
-        <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: fReg }]}>
-          בסיום האימון, סמן סטים שבוצעו ולחץ על שמירת אימון כדי לראות כאן את המשקל האחרון ואת גרף המגמה לתרגיל זה.
-        </Text>
-      </View>
-    );
+    return {
+      sessions,
+      last: null,
+      trendBg: colors.secondary,
+      trendFg: colors.secondaryForeground,
+      strokeColor: colors.primary,
+      trendLabel: '🆕 אין היסטוריה שמורה עדיין',
+      shortLine: '🆕 עדיין לא בוצע אימון שמור לתרגיל זה',
+    };
   }
 
   const first = sessions[0];
@@ -80,6 +54,7 @@ export default function ExerciseTrendCard({
   let trendFg = colors.primary;
   let strokeColor = colors.primary;
   let trendLabel = '🌱 אימון ראשון מתועד – בפעם הבאה תופיע כאן מגמת השינוי';
+  let shortDelta = 'אימון ראשון מתועד';
 
   if (prev) {
     const deltaW = roundWeight(last.bestWeight - prev.bestWeight);
@@ -95,27 +70,100 @@ export default function ExerciseTrendCard({
       trendFg = colors.success;
       strokeColor = colors.success;
       trendLabel = `📈 מגמת עלייה: +${deltaW} קילוגרם מהאימון שלפני${overallSuffix}`;
+      shortDelta = `📈 +${deltaW} קילוגרם מהפעם שלפני`;
     } else if (deltaW < 0) {
       trendBg = colors.dangerSoft;
       trendFg = colors.danger;
       strokeColor = colors.danger;
       trendLabel = `📉 ירידה של ${Math.abs(deltaW)} קילוגרם מהאימון שלפני${overallSuffix}`;
+      shortDelta = `📉 ${deltaW} קילוגרם מהפעם שלפני`;
     } else if (deltaReps > 0) {
       trendBg = colors.successSoft;
       trendFg = colors.success;
       strokeColor = colors.success;
       trendLabel = `📈 מגמת שיפור: +${deltaReps} חזרות באותו משקל (${last.bestWeight} קילוגרם)${overallSuffix}`;
+      shortDelta = `📈 +${deltaReps} חזרות באותו משקל`;
     } else if (deltaReps < 0) {
       trendBg = colors.secondary;
       trendFg = colors.secondaryForeground;
       strokeColor = colors.primary;
       trendLabel = `➡️ משקל זהה (${last.bestWeight} קילוגרם), ${deltaReps} חזרות מהפעם שלפני${overallSuffix}`;
+      shortDelta = '➡️ משקל זהה';
     } else {
       trendBg = colors.primarySoft;
       trendFg = colors.primary;
       strokeColor = colors.primary;
       trendLabel = `➡️ מגמה יציבה: שמירה על ${last.bestWeight} קילוגרם × ${last.bestReps} חזרות${overallSuffix}`;
+      shortDelta = '➡️ מגמה יציבה';
     }
+  }
+
+  const lastSummary =
+    last.bestWeight === 0
+      ? `משקל גוף × ${last.bestReps}`
+      : `${last.bestWeight} קילוגרם × ${last.bestReps}`;
+
+  return {
+    sessions,
+    last,
+    trendBg,
+    trendFg,
+    strokeColor,
+    trendLabel,
+    shortLine: `📌 פעם קודמת (${last.dateShort}): ${lastSummary}  •  ${shortDelta}`,
+  };
+}
+
+export default function ExerciseTrendCard({
+  exerciseId,
+  workoutHistory,
+  liveBestWeight,
+  colors,
+  fontsLoaded,
+  compact = false,
+}) {
+  const fReg = fontForWeight('regular', fontsLoaded);
+  const fMed = fontForWeight('medium', fontsLoaded);
+  const fSemi = fontForWeight('semibold', fontsLoaded);
+  const fBold = fontForWeight('bold', fontsLoaded);
+
+  const {
+    sessions,
+    last,
+    trendBg,
+    trendFg,
+    strokeColor,
+    trendLabel,
+  } = getExerciseTrendSummary(exerciseId, workoutHistory, colors);
+
+  if (!last) {
+    return (
+      <View
+        style={[
+          styles.card,
+          compact && { padding: 9 },
+          { backgroundColor: colors.background, borderColor: colors.border },
+        ]}
+      >
+        <View style={styles.headerRow}>
+          <Text style={[styles.title, { color: colors.foreground, fontFamily: fBold }]}>
+            📊 מה עשית בפעם הקודמת ומגמת התקדמות
+          </Text>
+          <View style={[styles.badge, { backgroundColor: colors.secondary }]}>
+            <Text
+              style={[styles.badgeText, { color: colors.secondaryForeground, fontFamily: fSemi }]}
+            >
+              🆕 אין היסטוריה שמורה עדיין
+            </Text>
+          </View>
+        </View>
+        {!compact && (
+          <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: fReg }]}>
+            בסיום האימון, סמן סטים שבוצעו ולחץ על שמירת אימון כדי לראות כאן את המשקל האחרון ואת גרף המגמה לתרגיל זה.
+          </Text>
+        )}
+      </View>
+    );
   }
 
   const liveRounded = roundWeight(liveBestWeight);
@@ -155,11 +203,12 @@ export default function ExerciseTrendCard({
     <View
       style={[
         styles.card,
+        compact && { padding: 9, gap: 4 },
         { backgroundColor: colors.background, borderColor: colors.border },
       ]}
     >
       <View style={styles.topSplit}>
-        <View style={styles.infoCol}>
+        <View style={[styles.infoCol, compact && { gap: 4 }]}>
           <Text style={[styles.title, { color: colors.foreground, fontFamily: fBold }]}>
             📌 מה היה בפעם הקודמת ({last.dateShort})
           </Text>
@@ -185,12 +234,14 @@ export default function ExerciseTrendCard({
             </View>
           </View>
 
-          <Text style={[styles.setsBreakdown, { color: colors.mutedForeground, fontFamily: fReg }]}>
-            סטים מהפעם הקודמת:{' '}
-            {last.sets
-              .map((s) => `${s.weight} קילוגרם (${s.reps} חזרות)`)
-              .join('  •  ')}
-          </Text>
+          {!compact && (
+            <Text style={[styles.setsBreakdown, { color: colors.mutedForeground, fontFamily: fReg }]}>
+              סטים מהפעם הקודמת:{' '}
+              {last.sets
+                .map((s) => `${s.weight} קילוגרם (${s.reps} חזרות)`)
+                .join('  •  ')}
+            </Text>
+          )}
 
           <Text style={[styles.liveCompareText, { color: liveComparisonColor, fontFamily: fSemi }]}>
             {liveComparisonText}
@@ -201,13 +252,14 @@ export default function ExerciseTrendCard({
           <View
             style={[
               styles.sparkWrap,
+              compact && { width: 220, paddingVertical: 4 },
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
           >
             <Text style={[styles.sparkTitle, { color: colors.mutedForeground, fontFamily: fSemi }]}>
               מגמת {recent.length} האימונים האחרונים
             </Text>
-            <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height={92}>
+            <Svg viewBox={`0 0 ${W} ${H}`} width="100%" height={compact ? 66 : 92}>
               <Line
                 x1={padX}
                 y1={H - padY}
