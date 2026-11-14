@@ -512,6 +512,19 @@ export default function App(): React.ReactElement {
     persistDraft(updated);
   };
 
+  const applyWeightFromSet = (ex: Exercise, setNum: number, nextWeight: number) => {
+    const updated: ActiveDraft = { ...activeDraft };
+    for (let s = 1; s <= ex.sets; s++) {
+      if (s === setNum || s > setNum) {
+        const cur = getSetEntry(ex, s);
+        if (s === setNum || !cur.done) {
+          updated[`${ex.id}-${s}`] = { ...cur, weight: nextWeight };
+        }
+      }
+    }
+    persistDraft(updated);
+  };
+
   const stepSupportedWeight = (ex: Exercise, setNum: number, direction: number) => {
     const configs = getConfigsForExercise(ex);
     const cur = getSetEntry(ex, setNum);
@@ -521,18 +534,11 @@ export default function App(): React.ReactElement {
       idx = Math.max(0, configs.findIndex((c) => c.totalWeight === snapped));
     }
     const nextIdx = Math.max(0, Math.min(configs.length - 1, idx + direction));
-    persistDraft({
-      ...activeDraft,
-      [`${ex.id}-${setNum}`]: { ...cur, weight: configs[nextIdx].totalWeight },
-    });
+    applyWeightFromSet(ex, setNum, configs[nextIdx].totalWeight);
   };
 
   const selectWeightForSet = (ex: Exercise, setNum: number, exactWeight: number) => {
-    const cur = getSetEntry(ex, setNum);
-    persistDraft({
-      ...activeDraft,
-      [`${ex.id}-${setNum}`]: { ...cur, weight: exactWeight },
-    });
+    applyWeightFromSet(ex, setNum, exactWeight);
   };
 
   const selectWeightForExercise = (ex: Exercise, exactWeight: number) => {
