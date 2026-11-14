@@ -107,7 +107,6 @@ export default function App(): React.ReactElement {
   const [lastNonProgressTab, setLastNonProgressTab] = useState<WorkoutTabKey>('workoutA');
   const [currentExerciseIdx, setCurrentExerciseIdx] = useState<number>(0);
   const [currentSetIdx, setCurrentSetIdx] = useState<number>(0);
-  const [mobilePane, setMobilePane] = useState<'set' | 'trend'>('set');
   const [exerciseStepsModalOpen, setExerciseStepsModalOpen] = useState<boolean>(false);
   const [guideModalOpen, setGuideModalOpen] = useState<boolean>(false);
   const [exerciseDropdownOpen, setExerciseDropdownOpen] = useState<boolean>(false);
@@ -691,7 +690,6 @@ export default function App(): React.ReactElement {
     setCurrentTab(nextTab);
     setCurrentExerciseIdx(0);
     setCurrentSetIdx(0);
-    setMobilePane('set');
     if (
       exerciseScrollRef.current &&
       typeof exerciseScrollRef.current.scrollTo === 'function'
@@ -719,13 +717,11 @@ export default function App(): React.ReactElement {
     setExerciseStepsModalOpen(false);
     setCurrentExerciseIdx(clamped);
     setCurrentSetIdx(clampedSet);
-    setMobilePane('set');
   };
 
   const goPrevStep = () => {
     if (safeSetIdx > 0) {
       setCurrentSetIdx(safeSetIdx - 1);
-      setMobilePane('set');
     } else if (safeExIdx > 0) {
       const prevEx = visibleExercises[safeExIdx - 1];
       const prevSets = prevEx.sets;
@@ -736,7 +732,6 @@ export default function App(): React.ReactElement {
   const goNextStep = () => {
     if (safeSetIdx < activeEffectiveSets - 1) {
       setCurrentSetIdx(safeSetIdx + 1);
-      setMobilePane('set');
     } else if (safeExIdx < visibleExercises.length - 1) {
       goToExercise(safeExIdx + 1, 0);
     } else {
@@ -1220,7 +1215,6 @@ export default function App(): React.ReactElement {
               const curCfgIdx = exConfigs.findIndex((c) => c.totalWeight === entry.weight);
               const atMin = curCfgIdx <= 0;
               const atMax = curCfgIdx >= exConfigs.length - 1;
-              const trendSummary = getExerciseTrendSummary(ex.id, sortedHistoryDesc, colors);
 
               const renderSingleSetWorkspace = () => (
                 <View
@@ -1977,137 +1971,7 @@ export default function App(): React.ReactElement {
                       </View>
                     </>
                   ) : (
-                    <>
-                      {/* Mobile Compact: 1-Line Clickable Trend Strip (only when history exists) + 2-Tab Switcher */}
-                      {trendSummary.sessions.length > 0 && (
-                        <Pressable
-                          onPress={() => setMobilePane('trend')}
-                          style={[
-                            styles.mobileTrendBanner,
-                            { backgroundColor: trendSummary.trendBg, borderColor: colors.border },
-                          ]}
-                        >
-                          <Text
-                            numberOfLines={1}
-                            style={[
-                              styles.mobileTrendText,
-                              { color: trendSummary.trendFg, fontFamily: fSemi },
-                            ]}
-                          >
-                            {trendSummary.shortLine}
-                          </Text>
-                        </Pressable>
-                      )}
-
-                      <View style={styles.mobilePaneTabsRow}>
-                        {(
-                          [
-                            { id: 'set', label: '🏋️ התרגיל' },
-                            { id: 'trend', label: '📈 מגמה וסטים' },
-                          ] as { id: 'set' | 'trend'; label: string }[]
-                        ).map((tabItem) => {
-                          const active = mobilePane === tabItem.id;
-                          return (
-                            <Pressable
-                              key={tabItem.id}
-                              onPress={() => setMobilePane(tabItem.id)}
-                              style={[
-                                styles.mobilePaneTabBtn,
-                                {
-                                  backgroundColor: active ? colors.primary : colors.background,
-                                  borderColor: active ? colors.primary : colors.border,
-                                },
-                              ]}
-                            >
-                              <Text
-                                numberOfLines={1}
-                                style={[
-                                  styles.mobilePaneTabText,
-                                  {
-                                    color: active ? colors.primaryForeground : colors.foreground,
-                                    fontFamily: fSemi,
-                                  },
-                                ]}
-                              >
-                                {tabItem.label}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-
-                      <View style={styles.flexOne}>
-                        {mobilePane === 'set' && renderSingleSetWorkspace()}
-                        {mobilePane === 'trend' && (
-                          <View style={styles.mobileTrendPaneWrap}>
-                            <ExerciseTrendCard
-                              exerciseId={ex.id}
-                              workoutHistory={sortedHistoryDesc}
-                              liveBestWeight={bestWeightToday}
-                              colors={colors}
-                              fontsLoaded={fontsLoaded}
-                            />
-                            <View
-                              style={[
-                                styles.subCard,
-                                { backgroundColor: colors.background, borderColor: colors.border },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.subCardTitle,
-                                  { color: colors.foreground, fontFamily: fBold },
-                                ]}
-                              >
-                                סיכום הסטים שלך בתרגיל זה (לחיצה מעבירה לסט):
-                              </Text>
-                              <View style={styles.filterRow}>
-                                {Array.from({ length: effectiveSets }, (_, i) => i + 1).map(
-                                  (sIdxNum) => {
-                                    const sEntry = getSetEntry(ex, sIdxNum);
-                                    return (
-                                      <Pressable
-                                        key={sIdxNum}
-                                        onPress={() => {
-                                          setCurrentSetIdx(sIdxNum - 1);
-                                          setMobilePane('set');
-                                        }}
-                                        style={[
-                                          styles.filterChipCompact,
-                                          {
-                                            backgroundColor: sEntry.done
-                                              ? colors.successSoft
-                                              : colors.card,
-                                            borderColor: sEntry.done
-                                              ? colors.success
-                                              : colors.border,
-                                          },
-                                        ]}
-                                      >
-                                        <Text
-                                          style={[
-                                            styles.smallBtnText,
-                                            {
-                                              color: sEntry.done
-                                                ? colors.success
-                                                : colors.foreground,
-                                              fontFamily: fSemi,
-                                            },
-                                          ]}
-                                        >
-                                          סט {sIdxNum}: {sEntry.weight} קילוגרם × {sEntry.reps}{' '}
-                                          {sEntry.done ? '✓' : ''}
-                                        </Text>
-                                      </Pressable>
-                                    );
-                                  }
-                                )}
-                              </View>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    </>
+                    <View style={styles.flexOne}>{renderSingleSetWorkspace()}</View>
                   )}
                 </View>
               );
@@ -4198,39 +4062,6 @@ const styles = StyleSheet.create({
   exSetColWide: {
     flex: 1,
     overflow: 'hidden',
-  },
-  mobileTrendBanner: {
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  mobileTrendText: {
-    fontSize: 11,
-    textAlign: 'right',
-    writingDirection: 'rtl',
-  },
-  mobilePaneTabsRow: {
-    flexDirection: 'row-reverse',
-    gap: 6,
-  },
-  mobilePaneTabBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 9,
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mobilePaneTabText: {
-    fontSize: 11,
-    writingDirection: 'rtl',
-  },
-  mobileTrendPaneWrap: {
-    flex: 1,
-    gap: 8,
-    justifyContent: 'center',
   },
   singleSetWorkspace: {
     flex: 1,
