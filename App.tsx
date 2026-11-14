@@ -1022,37 +1022,45 @@ export default function App(): React.ReactElement {
       {/* PINNED COMPACT TOP HEADER BAR */}
       <header className="shrink-0 border-b border-secondary bg-primary px-2.5 py-1.5 sm:px-4 sm:py-2.5">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-1.5 sm:gap-2">
-          {/* Row 1: Brand + Sync + Actions */}
-          <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2">
+          {/* Row 1: Single-line Brand + Sync + Actions */}
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2">
             <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
               <FeaturedIcon icon={Activity} size="sm" color="brand" theme="modern" />
               <span className="truncate text-sm font-bold text-primary sm:text-md">AI Trainer</span>
-              {isWide && (
-                <Badge size="sm" color="brand">
-                  מאמן כוח חכם
-                </Badge>
+              {isWide ? (
+                <>
+                  <Badge size="sm" color="brand">
+                    מאמן כוח חכם
+                  </Badge>
+                  <BadgeWithDot
+                    size="sm"
+                    color={
+                      syncStatus.mode === 'cloud'
+                        ? 'success'
+                        : syncStatus.mode === 'connecting'
+                        ? 'brand'
+                        : 'gray'
+                    }
+                  >
+                    {syncStatus.message}
+                  </BadgeWithDot>
+                </>
+              ) : (
+                <span
+                  title={syncStatus.message}
+                  aria-label={syncStatus.message}
+                  className={`size-2 shrink-0 rounded-full ${
+                    syncStatus.mode === 'cloud'
+                      ? 'bg-fg-success-primary'
+                      : syncStatus.mode === 'connecting'
+                      ? 'bg-fg-brand-primary animate-pulse'
+                      : 'bg-fg-quaternary'
+                  }`}
+                />
               )}
-              <BadgeWithDot
-                size="sm"
-                color={
-                  syncStatus.mode === 'cloud'
-                    ? 'success'
-                    : syncStatus.mode === 'connecting'
-                    ? 'brand'
-                    : 'gray'
-                }
-              >
-                {isWide
-                  ? syncStatus.message
-                  : syncStatus.mode === 'cloud'
-                  ? 'מסונכרן'
-                  : syncStatus.mode === 'connecting'
-                  ? 'מתחבר'
-                  : 'מקומי'}
-              </BadgeWithDot>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
               <Button
                 size="xs"
                 color={currentTab === 'progress' ? 'primary' : 'secondary'}
@@ -1061,17 +1069,29 @@ export default function App(): React.ReactElement {
                   selectMainTab(currentTab === 'progress' ? lastNonProgressTab : 'progress')
                 }
               >
-                ההתקדמות שלי ({sortedHistoryDesc.length})
+                {isWide
+                  ? `ההתקדמות שלי (${sortedHistoryDesc.length})`
+                  : `יומן (${sortedHistoryDesc.length})`}
               </Button>
 
-              <Button
-                size="xs"
-                color={guideModalOpen ? 'primary' : 'secondary'}
-                iconLeading={BookOpen01}
-                onPress={() => setGuideModalOpen(true)}
-              >
-                מדריך וציוד
-              </Button>
+              {isWide ? (
+                <Button
+                  size="xs"
+                  color={guideModalOpen ? 'primary' : 'secondary'}
+                  iconLeading={BookOpen01}
+                  onPress={() => setGuideModalOpen(true)}
+                >
+                  מדריך וציוד
+                </Button>
+              ) : (
+                <ButtonUtility
+                  size="xs"
+                  color="secondary"
+                  icon={BookOpen01}
+                  tooltip="מדריך וציוד"
+                  onPress={() => setGuideModalOpen(true)}
+                />
+              )}
 
               <ButtonUtility
                 size="xs"
@@ -1097,44 +1117,55 @@ export default function App(): React.ReactElement {
                 onPress={toggleThemeMode}
               />
 
-              {showGoogleConnect && (
-                <Button
-                  size="xs"
-                  color="secondary"
-                  iconLeading={Link03}
-                  onPress={handleGoogleSignIn}
-                >
-                  Google
-                </Button>
-              )}
+              {showGoogleConnect &&
+                (isWide ? (
+                  <Button
+                    size="xs"
+                    color="secondary"
+                    iconLeading={Link03}
+                    onPress={handleGoogleSignIn}
+                  >
+                    Google
+                  </Button>
+                ) : (
+                  <ButtonUtility
+                    size="xs"
+                    color="secondary"
+                    icon={Link03}
+                    tooltip="חבר חשבון Google"
+                    onPress={handleGoogleSignIn}
+                  />
+                ))}
             </div>
           </div>
 
-          {/* Row 2: Main Workout Navigation Tabs (Untitled UI Tabs) */}
-          <Tabs
-            selectedKey={currentTab}
-            onSelectionChange={(key) => selectMainTab(key as WorkoutTabKey)}
-          >
-            <TabList aria-label="בחירת תוכנית אימון" type="button-border" size="sm" fullWidth>
-              <Tab id="workoutA">{isWide ? 'אימון A: חזה, גב וזרועות' : 'אימון A'}</Tab>
-              <Tab id="workoutB">{isWide ? 'אימון B: כתפיים, גב וזרועות' : 'אימון B'}</Tab>
-              <Tab id="all">כל התרגילים</Tab>
-            </TabList>
-          </Tabs>
+          {/* Row 2: Main Workout Navigation Tabs (shown on desktop or before workout starts on mobile) */}
+          {(isWide || !isWorkoutActive) && (
+            <Tabs
+              selectedKey={currentTab}
+              onSelectionChange={(key) => selectMainTab(key as WorkoutTabKey)}
+            >
+              <TabList aria-label="בחירת תוכנית אימון" type="button-border" size="sm" fullWidth>
+                <Tab id="workoutA">{isWide ? 'אימון A: חזה, גב וזרועות' : 'אימון A'}</Tab>
+                <Tab id="workoutB">{isWide ? 'אימון B: כתפיים, גב וזרועות' : 'אימון B'}</Tab>
+                <Tab id="all">כל התרגילים</Tab>
+              </TabList>
+            </Tabs>
+          )}
 
           {/* Running Active Workout Status Bar: Always visible while workout is running */}
           {isWorkoutActive && activeWorkout && (
-            <div className="flex flex-wrap items-center justify-between gap-1.5 rounded-xl bg-brand-primary_alt px-2.5 py-1.5 ring-1 ring-utility-brand-300 sm:px-3">
-              <div className="flex min-w-0 items-center gap-2">
+            <div className="flex items-center justify-between gap-1.5 rounded-xl bg-brand-primary_alt px-2 py-1 ring-1 ring-utility-brand-300 sm:px-3 sm:py-1.5">
+              <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
                 <span className="size-2 shrink-0 animate-pulse rounded-full bg-fg-success-primary" />
                 <span className="truncate text-xs font-bold text-primary sm:text-sm">
                   {isWide
                     ? WORKOUT_NAMES_MAP[activeWorkout.workoutTab] || 'אימון פעיל: כל התרגילים'
                     : activeWorkout.workoutTab === 'workoutA'
-                    ? 'אימון A פעיל'
+                    ? 'אימון A'
                     : activeWorkout.workoutTab === 'workoutB'
-                    ? 'אימון B פעיל'
-                    : 'אימון פעיל'}
+                    ? 'אימון B'
+                    : 'חופשי'}
                 </span>
                 <BadgeWithIcon
                   size="sm"
@@ -1147,7 +1178,7 @@ export default function App(): React.ReactElement {
                 </BadgeWithIcon>
               </div>
 
-              <div className="flex shrink-0 items-center gap-1.5">
+              <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
                 {!isWorkoutTab && (
                   <Button
                     size="xs"
@@ -1155,7 +1186,7 @@ export default function App(): React.ReactElement {
                     iconLeading={Activity}
                     onPress={() => selectMainTab(activeWorkout.workoutTab)}
                   >
-                    חזור לאימון
+                    {isWide ? 'חזור לאימון' : 'חזור'}
                   </Button>
                 )}
                 <Button
@@ -1167,7 +1198,7 @@ export default function App(): React.ReactElement {
                     setSaveModalOpen(true);
                   }}
                 >
-                  סיים אימון
+                  {isWide ? 'סיים אימון' : 'סיים'}
                 </Button>
                 <Button
                   size="xs"
@@ -1295,7 +1326,7 @@ export default function App(): React.ReactElement {
       {isWorkoutActive && isWorkoutTab && (
         <main
           className={`flex min-h-0 flex-1 flex-col ${
-            isWide ? 'overflow-hidden px-4 py-3' : 'overflow-y-auto px-2.5 pt-2 pb-4'
+            isWide ? 'overflow-hidden px-4 py-2' : 'overflow-y-auto px-2 pt-1.5 pb-2.5'
           }`}
         >
           <div
@@ -1351,10 +1382,19 @@ export default function App(): React.ReactElement {
                   : exConfigs;
 
                 const renderSingleSetWorkspace = () => (
-                  <div className="flex flex-col gap-2">
+                  <div
+                    className={
+                      isWide ? 'flex min-h-0 flex-1 flex-col gap-2' : 'flex flex-col gap-1.5'
+                    }
+                  >
                     {/* Set Selector Pills + Equipment Toggle */}
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="scrollbar-hide flex items-center gap-1.5 overflow-x-auto py-0.5">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="scrollbar-hide flex min-w-0 items-center gap-1 overflow-x-auto py-0.5 sm:gap-1.5">
+                        {!isWide && (
+                          <span className="shrink-0 text-[11px] font-semibold text-tertiary">
+                            סטים:
+                          </span>
+                        )}
                         {Array.from({ length: effectiveSets }, (_, i) => i + 1).map((sIdxNum) => {
                           const sEntry = getSetEntry(ex, sIdxNum);
                           const isActiveSet = sIdxNum === setNum;
@@ -1365,13 +1405,13 @@ export default function App(): React.ReactElement {
                               color={isActiveSet ? 'primary' : 'secondary'}
                               iconLeading={sEntry.done ? Check : undefined}
                               onPress={() => setCurrentSetIdx(sIdxNum - 1)}
-                              className={
+                              className={`shrink-0 ${!isWide ? 'px-2 py-1' : ''} ${
                                 !isActiveSet && sEntry.done
                                   ? 'bg-success-primary text-success-primary ring-utility-green-300'
-                                  : undefined
-                              }
+                                  : ''
+                              }`}
                             >
-                              סט {sIdxNum}
+                              {isWide ? `סט ${sIdxNum}` : `${sIdxNum}`}
                             </Button>
                           );
                         })}
@@ -1385,16 +1425,17 @@ export default function App(): React.ReactElement {
                             const next = Array.from(keys)[0] as EquipmentMode | undefined;
                             if (next) setExerciseEquipmentMode(ex, next);
                           }}
+                          className="shrink-0"
                         >
                           <ButtonGroupItem
                             id="pair"
-                            className="px-2.5 py-1.5 text-xs selected:bg-brand-solid selected:text-white"
+                            className="px-2 py-1 text-[11px] selected:bg-brand-solid selected:text-white sm:px-2.5 sm:py-1.5 sm:text-xs"
                           >
-                            2 משקולות יד
+                            {isWide ? '2 משקולות יד' : 'משקולות'}
                           </ButtonGroupItem>
                           <ButtonGroupItem
                             id="barbell"
-                            className="px-2.5 py-1.5 text-xs selected:bg-brand-solid selected:text-white"
+                            className="px-2 py-1 text-[11px] selected:bg-brand-solid selected:text-white sm:px-2.5 sm:py-1.5 sm:text-xs"
                           >
                             מוט ארוך
                           </ButtonGroupItem>
@@ -1404,23 +1445,27 @@ export default function App(): React.ReactElement {
 
                     {/* Weight + Reps Controls Panel */}
                     <div
-                      className={`flex flex-col gap-2 rounded-xl bg-secondary_alt p-2.5 ring-1 ${
+                      className={`flex flex-col gap-1.5 rounded-xl bg-secondary_alt p-2 ring-1 ${
                         entry.done ? 'ring-utility-green-300' : 'ring-secondary'
                       }`}
                     >
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                         {/* Weight Sub-Card */}
                         <div
-                          className={`flex flex-col justify-between gap-1.5 rounded-xl bg-primary p-2.5 shadow-xs ring-1 ${
+                          className={`flex flex-col justify-between gap-1 rounded-xl bg-primary p-2 shadow-xs ring-1 ${
                             exConfigs.length > 1 ? 'ring-utility-brand-200' : 'ring-secondary'
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-1">
+                          <div
+                            className={`flex items-center gap-1 ${
+                              isWide ? 'justify-between' : 'justify-center'
+                            }`}
+                          >
                             <span className="flex items-center gap-1 text-xs font-semibold text-tertiary">
                               <Scales02 className="size-3.5 text-fg-quaternary" />
                               <span>משקל</span>
                             </span>
-                            {effectiveSets > 1 && exConfigs.length > 1 && (
+                            {isWide && effectiveSets > 1 && exConfigs.length > 1 && (
                               <Button
                                 size="xs"
                                 color="link-color"
@@ -1466,7 +1511,7 @@ export default function App(): React.ReactElement {
                         </div>
 
                         {/* Reps Sub-Card */}
-                        <div className="flex flex-col justify-between gap-1.5 rounded-xl bg-primary p-2 shadow-xs ring-1 ring-secondary sm:p-2.5">
+                        <div className="flex flex-col justify-between gap-1 rounded-xl bg-primary p-2 shadow-xs ring-1 ring-secondary">
                           <div className="flex items-center justify-center gap-1">
                             <Repeat02 className="size-3.5 text-fg-quaternary" />
                             <span className="text-xs font-semibold text-tertiary">חזרות</span>
@@ -1536,7 +1581,7 @@ export default function App(): React.ReactElement {
 
                       {/* Set Completion CTA */}
                       <Button
-                        size="md"
+                        size="sm"
                         color={entry.done ? 'secondary' : 'primary'}
                         iconLeading={entry.done ? CheckCircle : Check}
                         onPress={() => toggleSetDone(ex, setNum)}
@@ -1552,7 +1597,7 @@ export default function App(): React.ReactElement {
 
                     {/* Visual Equipment & Animation Section */}
                     {isWide ? (
-                      <div className="flex flex-1 items-center justify-center rounded-xl bg-secondary_alt p-1.5 ring-1 ring-secondary">
+                      <div className="flex min-h-0 flex-1 items-stretch justify-center overflow-hidden rounded-xl bg-secondary_alt p-1.5 ring-1 ring-secondary">
                         <EquipmentBuildDiagram
                           compact
                           cfg={setCfg}
@@ -1563,8 +1608,8 @@ export default function App(): React.ReactElement {
                         />
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="flex items-center justify-center overflow-hidden rounded-xl bg-secondary_alt p-1 ring-1 ring-secondary">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div className="flex h-[144px] items-stretch justify-center overflow-hidden rounded-xl bg-secondary_alt p-0.5 ring-1 ring-secondary">
                           <ExerciseAnimation
                             compact
                             micro
@@ -1574,7 +1619,7 @@ export default function App(): React.ReactElement {
                             fontsLoaded={fontsLoaded}
                           />
                         </div>
-                        <div className="flex items-center justify-center overflow-hidden rounded-xl bg-secondary_alt p-1 ring-1 ring-secondary">
+                        <div className="flex h-[144px] items-stretch justify-center overflow-hidden rounded-xl bg-secondary_alt p-0.5 ring-1 ring-secondary">
                           <EquipmentBuildDiagram
                             compact
                             micro
@@ -1622,8 +1667,8 @@ export default function App(): React.ReactElement {
                 return (
                   <div
                     key={ex.id}
-                    className={`flex flex-col gap-2.5 rounded-2xl bg-primary shadow-xs ring-1 ring-secondary ${
-                      isWide ? 'min-h-0 flex-1 overflow-hidden p-3.5' : 'p-3'
+                    className={`flex flex-col gap-2 rounded-2xl bg-primary p-2.5 shadow-xs ring-1 ring-secondary ${
+                      isWide ? 'min-h-0 flex-1 overflow-hidden' : ''
                     }`}
                   >
                     {/* Card Header (Clean - NO ExerciseGifIcon inside card) */}
@@ -1653,7 +1698,7 @@ export default function App(): React.ReactElement {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-2 border-b border-secondary pb-2.5">
+                      <div className="flex flex-col gap-1.5 border-b border-secondary pb-1.5">
                         <div className="flex items-center gap-1.5">
                           <ButtonUtility
                             size="xs"
@@ -1667,7 +1712,7 @@ export default function App(): React.ReactElement {
                           <button
                             type="button"
                             onClick={() => setExerciseDropdownOpen(true)}
-                            className={`flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-lg bg-secondary_alt px-2.5 py-1.5 ring-1 transition ${
+                            className={`flex min-w-0 flex-1 cursor-pointer items-center justify-between gap-2 rounded-lg bg-secondary_alt px-2.5 py-1 ring-1 transition ${
                               exerciseDropdownOpen ? 'ring-2 ring-brand' : 'ring-secondary'
                             }`}
                           >
@@ -1697,24 +1742,19 @@ export default function App(): React.ReactElement {
                           />
                         </div>
 
-                        <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <div className="flex items-center justify-between gap-1.5">
                           <span className="min-w-0 flex-1 truncate text-[11px] text-tertiary">
                             {conciseMetaText}
                           </span>
-                          <div className="flex shrink-0 items-center gap-1.5">
-                            <Badge size="sm" color="brand">
-                              סט {setNum}/{effectiveSets}
-                            </Badge>
-                            <button
-                              type="button"
-                              onClick={() => startTimer(ex.restSec)}
-                              className="cursor-pointer rounded-full"
-                            >
-                              <BadgeWithIcon size="sm" color="warning" iconLeading={Clock}>
-                                מנוחה: {ex.restSec} שניות
-                              </BadgeWithIcon>
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => startTimer(ex.restSec)}
+                            className="shrink-0 cursor-pointer rounded-full"
+                          >
+                            <BadgeWithIcon size="sm" color="warning" iconLeading={Clock}>
+                              מנוחה: {ex.restSec} שניות
+                            </BadgeWithIcon>
+                          </button>
                         </div>
                       </div>
                     )}
@@ -1732,7 +1772,7 @@ export default function App(): React.ReactElement {
                         <div className="grid min-h-0 flex-1 grid-cols-12 gap-3">
                           {/* Exercise Visual + Steps & Videos (Right in RTL -> cols 5) */}
                           <div className="col-span-5 flex min-h-0 flex-col justify-between gap-2.5">
-                            <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-secondary_alt p-2 ring-1 ring-secondary">
+                            <div className="flex min-h-0 flex-1 items-stretch justify-center overflow-hidden rounded-xl bg-secondary_alt p-1.5 ring-1 ring-secondary">
                               <ExerciseAnimation
                                 compact
                                 exercise={ex}
@@ -1769,7 +1809,7 @@ export default function App(): React.ReactElement {
                           </div>
 
                           {/* Active Set Controls & Weight Diagram (Left in RTL -> cols 7) */}
-                          <div className="col-span-7 flex min-h-0 flex-col justify-between">
+                          <div className="col-span-7 flex min-h-0 flex-col">
                             {renderSingleSetWorkspace()}
                           </div>
                         </div>
@@ -1811,10 +1851,10 @@ export default function App(): React.ReactElement {
 
       {/* PERSISTENT BOTTOM DOCK WHEN WORKOUT IS ACTIVE: NAVIGATION + PER-SET REST TIMER */}
       {isWorkoutActive && (
-        <footer className="shrink-0 border-t border-secondary bg-primary px-2.5 py-2 sm:px-4 sm:py-2.5">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-2">
+        <footer className="shrink-0 border-t border-secondary bg-primary px-2 py-1.5 sm:px-4 sm:py-2.5">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-1.5 sm:gap-2">
             {isWorkoutTab && activeEx && (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                 <Button
                   size="sm"
                   color="secondary"
@@ -1840,7 +1880,7 @@ export default function App(): React.ReactElement {
                       : ''
                   }`}
                 >
-                  סיים ושמור ({totalDoneInView}/{totalSetsInView})
+                  {isWide ? 'סיים ושמור' : 'שמור'} ({totalDoneInView}/{totalSetsInView})
                 </Button>
 
                 <Button
@@ -1858,9 +1898,9 @@ export default function App(): React.ReactElement {
             )}
 
             {/* Per-Set Rest Watch + Live Progress Stats Row */}
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2">
               <div
-                className={`flex items-center gap-1.5 rounded-lg px-2 py-1 ring-1 ${
+                className={`flex w-full items-center justify-between gap-1.5 rounded-lg px-2 py-1 ring-1 sm:w-auto sm:justify-start ${
                   timerFinished
                     ? 'bg-success-primary ring-utility-green-300'
                     : 'bg-secondary_alt ring-secondary'
@@ -1877,52 +1917,52 @@ export default function App(): React.ReactElement {
                     <Clock className="size-3.5 shrink-0 text-fg-brand-primary" />
                   )}
                   <span className="font-sans text-[11px] font-semibold text-tertiary">
-                    מנוחה לסט:
+                    {isWide ? 'מנוחה לסט:' : 'מנוחה:'}
                   </span>
                   <span>{timerFinished ? 'המשך!' : formatTime(timerSeconds)}</span>
                 </span>
 
-                <Button
-                  size="xs"
-                  color={timerRunning ? 'primary-destructive' : 'primary'}
-                  onPress={toggleTimer}
-                  className="px-2.5 py-1 text-xs"
-                >
-                  {timerRunning ? 'עצור' : 'הפעל'}
-                </Button>
-                <Button
-                  size="xs"
-                  color="secondary"
-                  onPress={() => startTimer(60)}
-                  className="px-2 py-1 text-xs"
-                >
-                  60 שניות
-                </Button>
-                <Button
-                  size="xs"
-                  color="secondary"
-                  onPress={() => startTimer(90)}
-                  className="px-2 py-1 text-xs"
-                >
-                  90 שניות
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="xs"
+                    color={timerRunning ? 'primary-destructive' : 'primary'}
+                    onPress={toggleTimer}
+                    className="px-2.5 py-1 text-xs"
+                  >
+                    {timerRunning ? 'עצור' : 'הפעל'}
+                  </Button>
+                  <Button
+                    size="xs"
+                    color="secondary"
+                    onPress={() => startTimer(60)}
+                    className="px-2 py-1 text-xs"
+                  >
+                    {isWide ? '60 שניות' : '60'}
+                  </Button>
+                  <Button
+                    size="xs"
+                    color="secondary"
+                    onPress={() => startTimer(90)}
+                    className="px-2 py-1 text-xs"
+                  >
+                    {isWide ? '90 שניות' : '90'}
+                  </Button>
+                </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (currentTab !== 'progress') selectMainTab('progress');
-                }}
-                className="cursor-pointer rounded-full transition hover:opacity-85"
-              >
-                <BadgeWithIcon size="sm" color="gray" type="modern" iconLeading={Award01}>
-                  {isWide
-                    ? `${totalSetsInView > 0 ? `סטים: ${totalDoneInView}/${totalSetsInView} • ` : ''}${progressStats.weekWorkouts} השבוע • ${progressStats.totalWorkouts} אימונים`
-                    : totalSetsInView > 0
-                    ? `${totalDoneInView}/${totalSetsInView} • ${progressStats.totalWorkouts} אימונים`
-                    : `${progressStats.totalWorkouts} אימונים`}
-                </BadgeWithIcon>
-              </button>
+              {isWide && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (currentTab !== 'progress') selectMainTab('progress');
+                  }}
+                  className="cursor-pointer rounded-full transition hover:opacity-85"
+                >
+                  <BadgeWithIcon size="sm" color="gray" type="modern" iconLeading={Award01}>
+                    {`${totalSetsInView > 0 ? `סטים: ${totalDoneInView}/${totalSetsInView} • ` : ''}${progressStats.weekWorkouts} השבוע • ${progressStats.totalWorkouts} אימונים`}
+                  </BadgeWithIcon>
+                </button>
+              )}
             </div>
           </div>
         </footer>

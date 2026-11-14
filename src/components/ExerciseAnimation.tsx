@@ -950,13 +950,18 @@ const styles = StyleSheet.create({
   },
   containerCompact: {
     flex: 1,
-    padding: 10,
-    minHeight: 165,
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
+    padding: 8,
+    minHeight: 0,
   },
   containerMicro: {
     flex: 1,
-    padding: 7,
-    minHeight: 120,
+    width: '100%',
+    height: '100%',
+    padding: 5,
+    minHeight: 112,
     borderRadius: 11,
   },
   subToggleRow: {
@@ -1003,6 +1008,7 @@ const styles = StyleSheet.create({
   },
   cueTextMicro: {
     textAlign: 'center',
+    fontSize: 10.5,
   },
   loopBadge: {
     paddingHorizontal: 8,
@@ -1023,28 +1029,30 @@ const styles = StyleSheet.create({
   },
   svgWrapCompact: {
     flex: 1,
-    minHeight: 96,
+    minHeight: 72,
     width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   svgWrapMicro: {
     flex: 1,
-    minHeight: 82,
+    minHeight: 72,
     width: '100%',
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   metaFooter: {
     borderTopWidth: 1,
-    paddingTop: 8,
-    marginTop: 4,
-    gap: 4,
+    paddingTop: 5,
+    marginTop: 2,
+    gap: 2,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'right',
     writingDirection: 'rtl',
-    lineHeight: 18,
+    lineHeight: 15,
   },
 });
