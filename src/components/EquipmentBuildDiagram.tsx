@@ -1,25 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import Svg, { Line, Circle, Rect, Ellipse, G, Text as SvgText } from 'react-native-svg';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Svg, { Line, Circle, Rect, G, Text as SvgText } from 'react-native-svg';
 import { fontForWeight } from '../theme';
 import type { EquipmentMode, PlateConfig, ThemeColors } from '../types';
-
-function clamp01(v: number): number {
-  return Math.max(0, Math.min(1, v));
-}
-
-function easeOutCubic(t: number): number {
-  const u = clamp01(t);
-  return 1 - Math.pow(1 - u, 3);
-}
 
 interface PlateStyleInfo {
   weight: number;
   label: string;
-  rY: number;
-  rX: number;
+  height: number;
   fill: string;
-  edge: string;
   stroke: string;
   badgeBg: string;
 }
@@ -28,42 +17,34 @@ const PLATE_STYLES: Record<number, PlateStyleInfo> = {
   5: {
     weight: 5,
     label: '5',
-    rY: 28,
-    rX: 16,
+    height: 78,
     fill: '#334155',
-    edge: '#1e293b',
     stroke: '#94a3b8',
-    badgeBg: '#0f172a',
+    badgeBg: '#1e293b',
   },
   2.5: {
     weight: 2.5,
     label: '2.5',
-    rY: 23,
-    rX: 13.5,
+    height: 64,
     fill: '#2563eb',
-    edge: '#1d4ed8',
     stroke: '#93c5fd',
-    badgeBg: '#1e40af',
+    badgeBg: '#1d4ed8',
   },
   1.25: {
     weight: 1.25,
     label: '1.25',
-    rY: 18.5,
-    rX: 11,
+    height: 50,
     fill: '#0d9488',
-    edge: '#0f766e',
     stroke: '#5eead4',
-    badgeBg: '#115e59',
+    badgeBg: '#0f766e',
   },
   0.5: {
     weight: 0.5,
     label: '0.5',
-    rY: 14.5,
-    rX: 9,
+    height: 38,
     fill: '#d97706',
-    edge: '#b45309',
     stroke: '#fde68a',
-    badgeBg: '#92400e',
+    badgeBg: '#b45309',
   },
 };
 
@@ -77,260 +58,226 @@ function expandPlates(cfg: PlateConfig | null | undefined): PlateStyleInfo[] {
   return list;
 }
 
-interface RenderLoadedBarParams {
-  cx: number;
-  barY: number;
-  halfLen: number;
-  gripHalf: number;
-  plateStep: number;
-  scale: number;
-  isBarbell: boolean;
+interface PlateCountGroup {
+  count: number;
+  info: PlateStyleInfo;
+}
+
+function getPlateGroups(cfg: PlateConfig | null | undefined): PlateCountGroup[] {
+  if (!cfg) return [];
+  const groups: PlateCountGroup[] = [];
+  if (cfg.c5 > 0) groups.push({ count: cfg.c5, info: PLATE_STYLES[5] });
+  if (cfg.c25 > 0) groups.push({ count: cfg.c25, info: PLATE_STYLES[2.5] });
+  if (cfg.c125 > 0) groups.push({ count: cfg.c125, info: PLATE_STYLES[1.25] });
+  if (cfg.c05 > 0) groups.push({ count: cfg.c05, info: PLATE_STYLES[0.5] });
+  return groups;
+}
+
+interface RenderOneSidePoleParams {
   plates: PlateStyleInfo[];
-  phaseMs: number;
+  isBarbell: boolean;
   colors: ThemeColors;
-  keyPrefix: string;
   boldFont?: string;
+  medFont?: string;
   fontsLoaded: boolean;
 }
 
 /**
- * Draws one horizontal bar (short dumbbell or long barbell) with 3D-angled circular
- * plates on both sleeves, spinlock collars, and clear non-overlapping weight tags.
+ * Draws a simple, easy-to-read static SVG of ONE side of the bar/pole,
+ * emphasizing each plate weight clearly from inside to outside.
  */
-function renderLoadedBar({
-  cx,
-  barY,
-  halfLen,
-  gripHalf,
-  plateStep,
-  scale,
-  isBarbell,
+function renderOneSidePole({
   plates,
-  phaseMs,
+  isBarbell,
   colors,
-  keyPrefix,
   boldFont,
+  medFont,
   fontsLoaded,
-}: RenderLoadedBarParams): React.ReactElement[] {
-  // Active assembly happens in first 1500ms of each 4800ms cycle
-  const cycleMs = phaseMs % 4800;
+}: RenderOneSidePoleParams): React.ReactElement[] {
+  const barY = 58;
   const n = plates.length;
-  const sleeveStart = gripHalf + 5 * scale;
-  const barTip = halfLen - 4 * scale;
-
-  // Compute collar target right outside all plates (or right against stopper if empty)
-  const collarRestOffset = sleeveStart + n * plateStep + 5 * scale;
-  const collarStartOffset = halfLen + 8 * scale;
-  const collarT = n === 0 ? 1 : easeOutCubic((cycleMs - 950) / 480);
-  const collarOffset =
-    cycleMs >= 1500
-      ? collarRestOffset
-      : collarStartOffset + (collarRestOffset - collarStartOffset) * collarT;
-  const collarOpacity = n === 0 ? 0.9 : clamp01((cycleMs - 880) / 220);
+  const sleeveStart = 64;
+  const maxSleeveLen = 152;
+  const gap = n >= 7 ? 2.5 : 4;
+  const plateW =
+    n > 0 ? Math.min(34, Math.max(12, Math.floor((maxSleeveLen - (n - 1) * gap) / n))) : 28;
+  const collarX = n === 0 ? sleeveStart + 8 : sleeveStart + n * (plateW + gap) + 2;
+  const sleeveEnd = Math.max(236, collarX + 20);
 
   const elements: React.ReactElement[] = [];
 
-  // Chrome threaded bar shaft
+  // Subtle dashed center-cut marker on left showing this is one side of the bar
+  elements.push(
+    <Line
+      key="one-side-cut"
+      x1={8}
+      y1={36}
+      x2={8}
+      y2={80}
+      stroke={colors.mutedForeground}
+      strokeOpacity={0.35}
+      strokeWidth={1.5}
+      strokeDasharray="3 3"
+    />
+  );
+
+  // Bar shaft extending through sleeve
   elements.push(
     <Rect
-      key={`${keyPrefix}-shaft`}
-      x={cx - halfLen}
-      y={barY - 3 * scale}
-      width={halfLen * 2}
-      height={6 * scale}
-      rx={3 * scale}
+      key="pole-shaft"
+      x={12}
+      y={barY - 5}
+      width={sleeveEnd - 12}
+      height={10}
+      rx={4}
       fill="#94a3b8"
+    />,
+    <Rect
+      key="pole-highlight"
+      x={14}
+      y={barY - 3.5}
+      width={sleeveEnd - 16}
+      height={2.5}
+      rx={1.25}
+      fill="#e2e8f0"
+      fillOpacity={0.7}
     />
   );
 
-  // Knurled grip handle
+  // Knurled grip handle (one side stub)
   elements.push(
     <Rect
-      key={`${keyPrefix}-grip`}
-      x={cx - gripHalf}
-      y={barY - 5 * scale}
-      width={gripHalf * 2}
-      height={10 * scale}
-      rx={3 * scale}
+      key="pole-grip"
+      x={12}
+      y={barY - 9}
+      width={isBarbell ? 34 : 38}
+      height={18}
+      rx={3}
       fill={colors.foreground}
-      fillOpacity={0.85}
+      fillOpacity={0.86}
     />
   );
 
-  // Two-piece coupler seam in center for 152cm barbell
-  if (isBarbell) {
+  // Inner bar stopper flange before plates
+  elements.push(
+    <Rect
+      key="pole-stopper"
+      x={50}
+      y={barY - 14}
+      width={7}
+      height={28}
+      rx={2.5}
+      fill={colors.foreground}
+    />
+  );
+
+  if (n === 0) {
     elements.push(
-      <Rect
-        key={`${keyPrefix}-coupler`}
-        x={cx - 6}
-        y={barY - 6}
-        width={12}
-        height={12}
-        rx={2}
-        fill="#64748b"
-        stroke={colors.card}
-        strokeWidth={1}
-      />
+      <G key="empty-pole-note">
+        <Rect
+          x={96}
+          y={barY - 16}
+          width={136}
+          height={32}
+          rx={8}
+          fill={colors.card}
+          stroke={colors.border}
+          strokeWidth={1.2}
+        />
+        <SvgText
+          x={164}
+          y={barY + 4}
+          fontSize={11.5}
+          fontFamily={medFont}
+          fontWeight={fontsLoaded ? undefined : '600'}
+          fill={colors.foreground}
+          textAnchor="middle"
+        >
+          מוט ריק (ללא פלטות)
+        </SvgText>
+      </G>
     );
   }
 
-  // Inner bar stoppers (collars built into shaft before sleeves)
-  elements.push(
-    <Rect
-      key={`${keyPrefix}-stopL`}
-      x={cx - gripHalf - 4 * scale}
-      y={barY - 7.5 * scale}
-      width={4 * scale}
-      height={15 * scale}
-      rx={1.5 * scale}
-      fill={colors.foreground}
-    />,
-    <Rect
-      key={`${keyPrefix}-stopR`}
-      x={cx + gripHalf}
-      y={barY - 7.5 * scale}
-      width={4 * scale}
-      height={15 * scale}
-      rx={1.5 * scale}
-      fill={colors.foreground}
-    />
-  );
+  // Easy-to-read side-profile plates with centered bold weight labels
+  for (let i = 0; i < n; i++) {
+    const p = plates[i];
+    const px = sleeveStart + i * (plateW + gap);
+    const py = barY - p.height / 2;
+    const cx = px + plateW / 2;
+    const isNarrowMultiChar = plateW < 23 && p.label.length >= 3;
+    const fontSize = isNarrowMultiChar
+      ? 10.5
+      : plateW >= 30
+      ? 14
+      : plateW >= 24
+      ? 12
+      : p.label.length === 1
+      ? 12
+      : 9.5;
 
-  // Helper to render plates for one side (-1 left, +1 right)
-  const drawSidePlates = (dir: -1 | 1) => {
-    // Draw from INNERMOST -> OUTERMOST so outer discs sit cleanly in front of inner discs
-    for (let i = 0; i < n; i++) {
-      const p = plates[i];
-      const ry = p.rY * scale;
-      const rx = p.rX * scale;
-      const restOff = sleeveStart + i * plateStep + plateStep * 0.45;
-      const startOff = barTip + 14 * scale;
-
-      const delay = i * 140;
-      const t = cycleMs >= 1400 ? 1 : easeOutCubic((cycleMs - delay) / 520);
-      const opacity = cycleMs >= 1400 ? 1 : clamp01((cycleMs - delay + 60) / 180);
-      const off = startOff + (restOff - startOff) * t;
-      const px = cx + dir * off;
-
-      // 3D rim thickness offset toward inner side
-      const rimShift = -dir * 3.5 * scale;
-
-      // Alternate top/bottom weight callouts cleanly
-      const showLabelAbove = i % 2 === 0;
-      const tagY = showLabelAbove ? barY - ry - 12 * scale : barY + ry + 13 * scale;
-
-      elements.push(
-        <G key={`${keyPrefix}-plate-${dir}-${i}`} opacity={opacity}>
-          {/* 3D Cylinder Back/Side Thickness */}
-          <Ellipse cx={px + rimShift} cy={barY} rx={rx} ry={ry} fill={p.edge} />
-          {/* Main Circular/Angled Disc Face */}
-          <Ellipse
-            cx={px}
-            cy={barY}
-            rx={rx}
-            ry={ry}
-            fill={p.fill}
-            stroke={p.stroke}
-            strokeWidth={1.6}
-          />
-          {/* Inner Cast-Iron Groove Ring */}
-          <Ellipse
-            cx={px}
-            cy={barY}
-            rx={rx * 0.68}
-            ry={ry * 0.68}
-            fill="none"
-            stroke={p.stroke}
-            strokeOpacity={0.35}
-            strokeWidth={1}
-          />
-          {/* Center Bar Hole */}
-          <Ellipse
-            cx={px}
-            cy={barY}
-            rx={Math.max(2, rx * 0.22)}
-            ry={Math.max(3, 3.5 * scale)}
-            fill="#64748b"
-          />
-
-          {/* Big weight number directly on outermost plate face if 1-2 plates */}
-          {i === n - 1 && n <= 2 && rx >= 10 && (
-            <SvgText
-              x={px + dir * (rx * 0.36)}
-              y={barY + 3.5 * scale}
-              fontSize={Math.max(9.5, 11 * scale)}
-              fontFamily={boldFont}
-              fontWeight={fontsLoaded ? undefined : '700'}
-              fill="#ffffff"
-              textAnchor="middle"
-            >
-              {p.label}
-            </SvgText>
-          )}
-
-          {/* Pointer stem + crisp weight callout badge */}
-          <Line
-            x1={px}
-            y1={showLabelAbove ? barY - ry + 1 : barY + ry - 1}
-            x2={px}
-            y2={showLabelAbove ? tagY + 4 : tagY - 7}
-            stroke={p.stroke}
-            strokeWidth={1.2}
-          />
-          <Rect
-            x={px - (p.label.length > 2 ? 14 : 10)}
-            y={tagY - 7}
-            width={p.label.length > 2 ? 28 : 20}
-            height={13}
-            rx={4}
-            fill={p.badgeBg}
-            stroke={p.stroke}
-            strokeWidth={1}
-          />
-          <SvgText
-            x={px}
-            y={tagY + 2.8}
-            fontSize={9.5}
-            fontFamily={boldFont}
-            fontWeight={fontsLoaded ? undefined : '700'}
-            fill="#ffffff"
-            textAnchor="middle"
-          >
-            {p.label}
-          </SvgText>
-        </G>
-      );
-    }
-
-    // Spinlock Star Collar on outer end
-    const collarX = cx + dir * collarOffset;
     elements.push(
-      <G key={`${keyPrefix}-collar-${dir}`} opacity={collarOpacity}>
+      <G key={`plate-${i}`}>
         <Rect
-          x={collarX - 3.5 * scale}
-          y={barY - 9 * scale}
-          width={7 * scale}
-          height={18 * scale}
-          rx={2 * scale}
-          fill={colors.primary}
-          stroke={colors.card}
-          strokeWidth={1}
+          x={px}
+          y={py}
+          width={plateW}
+          height={p.height}
+          rx={Math.min(5, plateW / 3)}
+          fill={p.fill}
+          stroke={p.stroke}
+          strokeWidth={1.5}
         />
-        <Line
-          x1={collarX}
-          y1={barY - 9 * scale}
-          x2={collarX}
-          y2={barY + 9 * scale}
-          stroke="#ffffff"
-          strokeOpacity={0.5}
-          strokeWidth={1}
+        {/* Clean top bevel highlight for crisp depth without overlapping 3D ellipses */}
+        <Rect
+          x={px + 2}
+          y={py + 3}
+          width={Math.max(2, Math.min(4, plateW * 0.16))}
+          height={Math.max(8, p.height - 6)}
+          rx={1.5}
+          fill="#ffffff"
+          fillOpacity={0.18}
         />
+        <SvgText
+          x={cx}
+          y={barY + (isNarrowMultiChar ? 3.5 : fontSize * 0.36)}
+          fontSize={fontSize}
+          fontFamily={boldFont}
+          fontWeight={fontsLoaded ? undefined : '700'}
+          fill="#ffffff"
+          textAnchor="middle"
+          transform={isNarrowMultiChar ? `rotate(-90 ${cx} ${barY})` : undefined}
+        >
+          {p.label}
+        </SvgText>
       </G>
     );
-  };
+  }
 
-  drawSidePlates(-1);
-  drawSidePlates(1);
+  // Spinlock collar locking the outer end of the one-side sleeve
+  elements.push(
+    <G key="pole-collar">
+      <Rect
+        x={collarX}
+        y={barY - 15}
+        width={10}
+        height={30}
+        rx={3}
+        fill={colors.primary}
+        stroke={colors.card}
+        strokeWidth={1.2}
+      />
+      <Line
+        x1={collarX + 5}
+        y1={barY - 12}
+        x2={collarX + 5}
+        y2={barY + 12}
+        stroke="#ffffff"
+        strokeOpacity={0.65}
+        strokeWidth={1.3}
+      />
+    </G>
+  );
 
   return elements;
 }
@@ -348,80 +295,56 @@ export interface EquipmentBuildDiagramProps {
 export default function EquipmentBuildDiagram({
   cfg,
   mode,
-  paused = false,
   colors,
   fontsLoaded,
   compact = false,
   micro = false,
 }: EquipmentBuildDiagramProps): React.ReactElement {
-  const [phaseMs, setPhaseMs] = useState(0);
-  const startRef = useRef<number>(Date.now());
-
-  // Reset assembly animation cleanly whenever weight or equipment mode changes
-  useEffect(() => {
-    startRef.current = Date.now();
-    setPhaseMs(0);
-  }, [cfg?.totalWeight, mode]);
-
-  useEffect(() => {
-    if (paused) return undefined;
-    let rafId = 0;
-    let lastDraw = 0;
-
-    const tick = (now: number) => {
-      const elapsed = Date.now() - startRef.current;
-      const cycle = elapsed % 4800;
-      const shouldRender = cycle < 1600 || cycle > 4720;
-      if (shouldRender && now - lastDraw >= 32) {
-        lastDraw = now;
-        setPhaseMs(elapsed);
-      }
-      rafId = requestAnimationFrame(tick);
-    };
-
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [paused, cfg?.totalWeight, mode]);
-
   const plates = expandPlates(cfg);
-  const cycleMs = phaseMs % 4800;
-  const isAssembling = cycleMs < 1450;
+  const plateGroups = getPlateGroups(cfg);
 
+  const isPoleMode = mode === 'pair' || mode === 'single' || mode === 'barbell';
   const isPair = mode === 'pair' || mode === 'platePair';
-  const viewBoxStr = mode === 'barbell' ? '0 0 360 124' : '0 0 280 124';
+
+  const modePillLabel =
+    mode === 'pair'
+      ? micro
+        ? '× 2'
+        : '× 2 מוטות יד'
+      : mode === 'single'
+      ? micro
+        ? '× 1'
+        : 'מוט יד 1'
+      : mode === 'barbell'
+      ? micro
+        ? 'ארוך'
+        : 'מוט ארוך'
+      : mode === 'platePair'
+      ? micro
+        ? '× 2'
+        : '× 2 פלטות'
+      : 'משקל גוף';
 
   let headerCaption = '';
-  if (micro) {
-    if (mode === 'pair' || mode === 'single' || mode === 'platePair') {
-      headerCaption = `${cfg.totalWeight} קילוגרם`;
-    } else if (mode === 'barbell') {
-      headerCaption = `מוט ${cfg.totalWeight} קילוגרם`;
-    } else {
-      headerCaption = cfg.totalWeight === 0 ? 'משקל גוף' : `${cfg.totalWeight} קילוגרם`;
-    }
-  } else if (mode === 'pair') {
-    headerCaption = `איור הרכבה: 2 משקולות יד שוות (${cfg.totalWeight} קילוגרם כל אחת)`;
-  } else if (mode === 'single') {
-    headerCaption = `איור הרכבה: משקולת יד אחת (${cfg.totalWeight} קילוגרם)`;
-  } else if (mode === 'barbell') {
-    headerCaption = `איור הרכבה: המוט הארוך (${cfg.totalWeight} קילוגרם בסך הכל)`;
+  if (isPoleMode) {
+    headerCaption = micro
+      ? `${cfg.sideWeight} קילוגרם לצד`
+      : `משקל לכל צד של המוט: ${cfg.sideWeight} קילוגרם (סך הכל ${cfg.totalWeight} קילוגרם)`;
   } else if (mode === 'platePair') {
-    headerCaption = `איור הרכבה: פלטה בודדת בכל יד (${cfg.totalWeight} קילוגרם ללא מוט)`;
+    headerCaption = micro
+      ? `${cfg.totalWeight} קילוגרם ביד`
+      : `פלטה של ${cfg.totalWeight} קילוגרם בכל יד (ללא מוט)`;
   } else {
     headerCaption =
       cfg.totalWeight === 0
-        ? 'איור ציוד: משקל גוף בלבד (ללא פלטות)'
-        : `איור ציוד: תוספת פלטה של ${cfg.totalWeight} קילוגרם`;
+        ? 'משקל גוף בלבד (ללא משקולות)'
+        : `פלטת עזר: ${cfg.totalWeight} קילוגרם`;
   }
 
   const fReg = fontForWeight('regular', fontsLoaded);
   const fMed = fontForWeight('medium', fontsLoaded);
+  const fSemi = fontForWeight('semibold', fontsLoaded);
   const fBold = fontForWeight('bold', fontsLoaded);
-
-  const handleReplay = () => {
-    startRef.current = Date.now();
-    setPhaseMs(0);
-  };
 
   return (
     <View
@@ -432,100 +355,98 @@ export default function EquipmentBuildDiagram({
         { backgroundColor: colors.background, borderColor: colors.border },
       ]}
     >
+      {/* Top Row: Emphasize side-weight summary + equipment count */}
       <View style={styles.topBar}>
         <View style={styles.captionGroup}>
-          {isPair && (
-            <View
+          <View
+            style={[
+              styles.modePill,
+              {
+                backgroundColor: isPair ? colors.primarySoft : colors.card,
+                borderColor: isPair ? colors.primary : colors.border,
+              },
+            ]}
+          >
+            <Text
               style={[
-                styles.pairCountPill,
-                { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+                styles.modePillText,
+                {
+                  color: isPair ? colors.primary : colors.foreground,
+                  fontFamily: fBold,
+                },
               ]}
             >
-              <Text
-                style={[
-                  styles.pairCountText,
-                  { color: colors.primary, fontFamily: fontForWeight('bold', fontsLoaded) },
-                ]}
-              >
-                × 2
-              </Text>
-            </View>
-          )}
+              {modePillLabel}
+            </Text>
+          </View>
+
           <Text
             numberOfLines={1}
-            style={[
-              styles.captionText,
-              { color: colors.foreground, fontFamily: fontForWeight('semibold', fontsLoaded) },
-            ]}
+            style={[styles.captionText, { color: colors.foreground, fontFamily: fSemi }]}
           >
             {headerCaption}
           </Text>
         </View>
-        <Pressable
-          onPress={handleReplay}
-          style={[styles.replayPill, { backgroundColor: colors.card, borderColor: colors.border }]}
-        >
-          <Text
-            style={[
-              styles.replayText,
-              {
-                color: isAssembling ? colors.primary : colors.mutedForeground,
-                fontFamily: fontForWeight('medium', fontsLoaded),
-              },
-            ]}
-          >
-            {micro ? (isAssembling ? '🔩' : '🔄') : isAssembling ? '🔩 מרכיב...' : '🔄 הראה הרכבה'}
-          </Text>
-        </Pressable>
       </View>
 
+      {/* Weight Chips Row: Instant plate checklist for one side */}
+      {isPoleMode && (
+        <View style={styles.chipsRow}>
+          {plateGroups.length === 0 ? (
+            <View
+              style={[
+                styles.weightChip,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.weightChipText, { color: colors.mutedForeground, fontFamily: fMed }]}>
+                {mode === 'barbell' ? 'מוט 6 קילוגרם בלבד' : 'מוט 2 קילוגרם בלבד'}
+              </Text>
+            </View>
+          ) : (
+            plateGroups.map((g) => (
+              <View
+                key={g.info.weight}
+                style={[
+                  styles.weightChip,
+                  { backgroundColor: g.info.badgeBg, borderColor: g.info.stroke },
+                ]}
+              >
+                <Text style={[styles.weightChipText, { color: '#ffffff', fontFamily: fBold }]}>
+                  {g.count > 1 ? `${g.count} × ` : ''}
+                  {g.info.label} קילוגרם
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      )}
+
+      {/* Clean Static One-Side Pole / Plate SVG */}
       <View
         style={[
           styles.svgContainerBase,
-          compact ? (micro ? styles.svgContainerMicro : styles.svgContainerCompact) : styles.svgContainerFixed,
+          compact
+            ? micro
+              ? styles.svgContainerMicro
+              : styles.svgContainerCompact
+            : styles.svgContainerFixed,
         ]}
       >
         <Svg
-          viewBox={viewBoxStr}
+          viewBox="0 0 260 116"
           width="100%"
-          height={compact ? '100%' : 122}
+          height={compact ? '100%' : 114}
           preserveAspectRatio="xMidYMid meet"
         >
-          {(mode === 'pair' || mode === 'single') && (
+          {isPoleMode && (
             <G>
-              {renderLoadedBar({
-                cx: 140,
-                barY: 64,
-                halfLen: 112,
-                gripHalf: 22,
-                plateStep: 11.5,
-                scale: 0.94,
-                isBarbell: false,
+              {renderOneSidePole({
                 plates,
-                phaseMs,
+                isBarbell: mode === 'barbell',
                 colors,
-                keyPrefix: mode === 'pair' ? 'pair-single' : 'single',
                 boldFont: fBold,
-                fontsLoaded,
-              })}
-            </G>
-          )}
-
-          {mode === 'barbell' && (
-            <G>
-              {renderLoadedBar({
-                cx: 180,
-                barY: 62,
-                halfLen: 164,
-                gripHalf: 68,
-                plateStep: Math.min(11, Math.max(7, 72 / Math.max(1, plates.length))),
-                scale: 0.94,
-                isBarbell: true,
-                plates,
-                phaseMs,
-                colors,
-                keyPrefix: 'bb',
-                boldFont: fBold,
+                medFont: fMed,
                 fontsLoaded,
               })}
             </G>
@@ -534,19 +455,15 @@ export default function EquipmentBuildDiagram({
           {(mode === 'platePair' || (mode === 'bodyweight' && cfg.totalWeight > 0)) && (
             <G>
               {(() => {
-                const cx = 140;
+                const cx = 130;
+                const cy = 58;
                 const p = PLATE_STYLES[cfg.totalWeight] || PLATE_STYLES[2.5];
-                const r = p.rY * 1.45;
-                const t = cycleMs >= 1200 ? 1 : easeOutCubic(cycleMs / 500);
-                const liftY = 64 + (1 - t) * 18;
-                const alpha = cycleMs >= 1200 ? 1 : clamp01((cycleMs + 80) / 220);
-
+                const r = p.weight >= 5 ? 42 : p.weight >= 2.5 ? 36 : 30;
                 return (
-                  <G key="loose-single" opacity={alpha}>
-                    <Circle cx={cx + 3} cy={liftY + 3} r={r} fill={p.edge} />
+                  <G key="single-loose-plate">
                     <Circle
                       cx={cx}
-                      cy={liftY}
+                      cy={cy}
                       r={r}
                       fill={p.fill}
                       stroke={p.stroke}
@@ -554,7 +471,7 @@ export default function EquipmentBuildDiagram({
                     />
                     <Circle
                       cx={cx}
-                      cy={liftY}
+                      cy={cy}
                       r={r * 0.72}
                       fill="none"
                       stroke={p.stroke}
@@ -563,7 +480,7 @@ export default function EquipmentBuildDiagram({
                     />
                     <Circle
                       cx={cx}
-                      cy={liftY}
+                      cy={cy}
                       r={6.5}
                       fill={colors.background}
                       stroke={p.stroke}
@@ -571,8 +488,8 @@ export default function EquipmentBuildDiagram({
                     />
                     <SvgText
                       x={cx}
-                      y={liftY - r * 0.38}
-                      fontSize={13}
+                      y={cy - r * 0.36}
+                      fontSize={14}
                       fontFamily={fBold}
                       fontWeight={fontsLoaded ? undefined : '700'}
                       fill="#ffffff"
@@ -582,12 +499,12 @@ export default function EquipmentBuildDiagram({
                     </SvgText>
                     <SvgText
                       x={cx}
-                      y={liftY + r * 0.56}
+                      y={cy + r * 0.56}
                       fontSize={10}
                       fontFamily={fMed}
                       fontWeight={fontsLoaded ? undefined : '600'}
                       fill="#ffffff"
-                      fillOpacity={0.85}
+                      fillOpacity={0.9}
                       textAnchor="middle"
                     >
                       קילוגרם
@@ -601,18 +518,18 @@ export default function EquipmentBuildDiagram({
           {mode === 'bodyweight' && cfg.totalWeight === 0 && (
             <G>
               <Rect
-                x={45}
-                y={34}
-                width={190}
-                height={54}
-                rx={14}
+                x={30}
+                y={30}
+                width={200}
+                height={56}
+                rx={12}
                 fill={colors.card}
                 stroke={colors.border}
                 strokeWidth={1.5}
               />
               <SvgText
-                x={140}
-                y={57}
+                x={130}
+                y={54}
                 fontSize={13}
                 fontFamily={fBold}
                 fontWeight={fontsLoaded ? undefined : '700'}
@@ -622,38 +539,14 @@ export default function EquipmentBuildDiagram({
                 משקל גוף בלבד (ללא משקולות)
               </SvgText>
               <SvgText
-                x={140}
-                y={76}
-                fontSize={11}
+                x={130}
+                y={73}
+                fontSize={10.5}
                 fontFamily={fReg}
                 fill={colors.mutedForeground}
                 textAnchor="middle"
               >
                 אפשר להוסיף פלטה בבחירה למעלה
-              </SvgText>
-            </G>
-          )}
-
-          {isPair && (
-            <G>
-              <Rect
-                x={6}
-                y={6}
-                width={38}
-                height={22}
-                rx={11}
-                fill={colors.primary}
-              />
-              <SvgText
-                x={25}
-                y={21}
-                fontSize={12}
-                fontFamily={fBold}
-                fontWeight={fontsLoaded ? undefined : '700'}
-                fill={colors.primaryForeground}
-                textAnchor="middle"
-              >
-                × 2
               </SvgText>
             </G>
           )}
@@ -669,11 +562,11 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    gap: 4,
+    gap: 5,
   },
   wrapperCompact: {
     flex: 1,
-    minHeight: 110,
+    minHeight: 112,
     paddingVertical: 6,
   },
   wrapperMicro: {
@@ -692,32 +585,39 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
     overflow: 'hidden',
   },
-  pairCountPill: {
+  modePill: {
     borderWidth: 1,
     borderRadius: 999,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
   },
-  pairCountText: {
-    fontSize: 11,
+  modePillText: {
+    fontSize: 10.5,
   },
   captionText: {
-    fontSize: 12,
+    fontSize: 11.5,
     textAlign: 'right',
     writingDirection: 'rtl',
     flexShrink: 1,
   },
-  replayPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 999,
-    borderWidth: 1,
+  chipsRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 4,
   },
-  replayText: {
-    fontSize: 12,
+  weightChip: {
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  weightChipText: {
+    fontSize: 10.5,
+    writingDirection: 'rtl',
   },
   svgContainerBase: {
     width: '100%',
@@ -725,18 +625,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   svgContainerFixed: {
-    height: 122,
+    height: 114,
   },
   svgContainerCompact: {
     flex: 1,
-    minHeight: 82,
+    minHeight: 76,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
   svgContainerMicro: {
     flex: 1,
-    minHeight: 82,
+    minHeight: 74,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
