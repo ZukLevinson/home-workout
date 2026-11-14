@@ -336,6 +336,7 @@ export interface EquipmentBuildDiagramProps {
   colors: ThemeColors;
   fontsLoaded: boolean;
   compact?: boolean;
+  micro?: boolean;
 }
 
 export default function EquipmentBuildDiagram({
@@ -345,6 +346,7 @@ export default function EquipmentBuildDiagram({
   colors,
   fontsLoaded,
   compact = false,
+  micro = false,
 }: EquipmentBuildDiagramProps): React.ReactElement {
   const [phaseMs, setPhaseMs] = useState(0);
   const startRef = useRef<number>(Date.now());
@@ -379,8 +381,23 @@ export default function EquipmentBuildDiagram({
   const cycleMs = phaseMs % 4800;
   const isAssembling = cycleMs < 1450;
 
+  const isPair = mode === 'pair' || mode === 'platePair';
+  const viewBoxStr = mode === 'barbell' ? '0 0 360 124' : '0 0 280 124';
+
   let headerCaption = '';
-  if (mode === 'pair') {
+  if (micro) {
+    if (mode === 'pair') {
+      headerCaption = `${cfg.totalWeight} קילוגרם למשקולת`;
+    } else if (mode === 'single') {
+      headerCaption = `${cfg.totalWeight} קילוגרם`;
+    } else if (mode === 'barbell') {
+      headerCaption = `מוט ${cfg.totalWeight} קילוגרם`;
+    } else if (mode === 'platePair') {
+      headerCaption = `פלטה ${cfg.totalWeight} קילוגרם`;
+    } else {
+      headerCaption = cfg.totalWeight === 0 ? 'משקל גוף' : `פלטה ${cfg.totalWeight} קילוגרם`;
+    }
+  } else if (mode === 'pair') {
     headerCaption = `איור הרכבה: 2 משקולות יד שוות (${cfg.totalWeight} קילוגרם כל אחת)`;
   } else if (mode === 'single') {
     headerCaption = `איור הרכבה: משקולת יד אחת (${cfg.totalWeight} קילוגרם)`;
@@ -405,19 +422,39 @@ export default function EquipmentBuildDiagram({
       style={[
         styles.wrapper,
         compact && styles.wrapperCompact,
+        micro && styles.wrapperMicro,
         { backgroundColor: colors.background, borderColor: colors.border },
       ]}
     >
       <View style={styles.topBar}>
-        <Text
-          numberOfLines={1}
-          style={[
-            styles.captionText,
-            { color: colors.foreground, fontFamily: fontForWeight('semibold', fontsLoaded) },
-          ]}
-        >
-          {headerCaption}
-        </Text>
+        <View style={styles.captionGroup}>
+          {isPair && (
+            <View
+              style={[
+                styles.pairCountPill,
+                { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pairCountText,
+                  { color: colors.primary, fontFamily: fontForWeight('bold', fontsLoaded) },
+                ]}
+              >
+                × 2
+              </Text>
+            </View>
+          )}
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.captionText,
+              { color: colors.foreground, fontFamily: fontForWeight('semibold', fontsLoaded) },
+            ]}
+          >
+            {headerCaption}
+          </Text>
+        </View>
         <Pressable
           onPress={handleReplay}
           style={[styles.replayPill, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -431,75 +468,37 @@ export default function EquipmentBuildDiagram({
               },
             ]}
           >
-            {isAssembling ? '🔩 מרכיב...' : '🔄 הראה הרכבה'}
+            {micro ? (isAssembling ? '🔩' : '🔄') : isAssembling ? '🔩 מרכיב...' : '🔄 הראה הרכבה'}
           </Text>
         </Pressable>
       </View>
 
-      <View style={[styles.svgContainerBase, compact ? styles.svgContainerCompact : styles.svgContainerFixed]}>
+      <View
+        style={[
+          styles.svgContainerBase,
+          compact ? (micro ? styles.svgContainerMicro : styles.svgContainerCompact) : styles.svgContainerFixed,
+        ]}
+      >
         <Svg
-          viewBox="0 0 360 124"
+          viewBox={viewBoxStr}
           width="100%"
           height={compact ? '100%' : 122}
           preserveAspectRatio="xMidYMid meet"
         >
-          {mode === 'pair' && (
-            <G>
-              {/* Dumbbell 1 (Left) */}
-              {renderLoadedBar({
-                cx: 90,
-                barY: 62,
-                halfLen: 80,
-                gripHalf: 17,
-                plateStep: 9.5,
-                scale: 0.78,
-                isBarbell: false,
-                plates,
-                phaseMs,
-                colors,
-                keyPrefix: 'db1',
-              })}
-              {/* Subtle divider line */}
-              <Line
-                x1={180}
-                y1={20}
-                x2={180}
-                y2={106}
-                stroke={colors.border}
-                strokeWidth={1}
-                strokeDasharray="3 3"
-              />
-              {/* Dumbbell 2 (Right) */}
-              {renderLoadedBar({
-                cx: 270,
-                barY: 62,
-                halfLen: 80,
-                gripHalf: 17,
-                plateStep: 9.5,
-                scale: 0.78,
-                isBarbell: false,
-                plates,
-                phaseMs,
-                colors,
-                keyPrefix: 'db2',
-              })}
-            </G>
-          )}
-
-          {mode === 'single' && (
+          {(mode === 'pair' || mode === 'single') && (
             <G>
               {renderLoadedBar({
-                cx: 180,
-                barY: 62,
-                halfLen: 126,
-                gripHalf: 24,
-                plateStep: 12.5,
-                scale: 1,
+                cx: 140,
+                barY: 64,
+                halfLen: 112,
+                gripHalf: 22,
+                plateStep: 11.5,
+                scale: 0.94,
                 isBarbell: false,
                 plates,
                 phaseMs,
                 colors,
-                keyPrefix: 'single',
+                keyPrefix: mode === 'pair' ? 'pair-single' : 'single',
               })}
             </G>
           )}
@@ -524,16 +523,16 @@ export default function EquipmentBuildDiagram({
 
           {(mode === 'platePair' || (mode === 'bodyweight' && cfg.totalWeight > 0)) && (
             <G>
-              {(mode === 'platePair' ? [116, 244] : [180]).map((cx, idx) => {
+              {(() => {
+                const cx = 140;
                 const p = PLATE_STYLES[cfg.totalWeight] || PLATE_STYLES[2.5];
                 const r = p.rY * 1.45;
-                const delay = idx * 140;
-                const t = cycleMs >= 1200 ? 1 : easeOutCubic((cycleMs - delay) / 500);
-                const liftY = 62 + (1 - t) * 18;
-                const alpha = cycleMs >= 1200 ? 1 : clamp01((cycleMs - delay + 80) / 220);
+                const t = cycleMs >= 1200 ? 1 : easeOutCubic(cycleMs / 500);
+                const liftY = 64 + (1 - t) * 18;
+                const alpha = cycleMs >= 1200 ? 1 : clamp01((cycleMs + 80) / 220);
 
                 return (
-                  <G key={`loose-${idx}`} opacity={alpha}>
+                  <G key="loose-single" opacity={alpha}>
                     <Circle cx={cx + 3} cy={liftY + 3} r={r} fill={p.edge} />
                     <Circle
                       cx={cx}
@@ -583,14 +582,14 @@ export default function EquipmentBuildDiagram({
                     </SvgText>
                   </G>
                 );
-              })}
+              })()}
             </G>
           )}
 
           {mode === 'bodyweight' && cfg.totalWeight === 0 && (
             <G>
               <Rect
-                x={85}
+                x={45}
                 y={34}
                 width={190}
                 height={54}
@@ -600,7 +599,7 @@ export default function EquipmentBuildDiagram({
                 strokeWidth={1.5}
               />
               <SvgText
-                x={180}
+                x={140}
                 y={57}
                 fontSize={13}
                 fontWeight="700"
@@ -610,13 +609,36 @@ export default function EquipmentBuildDiagram({
                 משקל גוף בלבד (ללא משקולות)
               </SvgText>
               <SvgText
-                x={180}
+                x={140}
                 y={76}
                 fontSize={11}
                 fill={colors.mutedForeground}
                 textAnchor="middle"
               >
                 אפשר להוסיף פלטה בבחירה למעלה
+              </SvgText>
+            </G>
+          )}
+
+          {isPair && (
+            <G>
+              <Rect
+                x={6}
+                y={6}
+                width={38}
+                height={22}
+                rx={11}
+                fill={colors.primary}
+              />
+              <SvgText
+                x={25}
+                y={21}
+                fontSize={12}
+                fontWeight="800"
+                fill={colors.primaryForeground}
+                textAnchor="middle"
+              >
+                × 2
               </SvgText>
             </G>
           )}
@@ -639,11 +661,33 @@ const styles = StyleSheet.create({
     minHeight: 110,
     paddingVertical: 6,
   },
+  wrapperMicro: {
+    flex: 1,
+    minHeight: 120,
+    paddingHorizontal: 7,
+    paddingVertical: 6,
+  },
   topBar: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 6,
+  },
+  captionGroup: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 5,
+    overflow: 'hidden',
+  },
+  pairCountPill: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  pairCountText: {
+    fontSize: 11,
   },
   captionText: {
     fontSize: 12,
@@ -652,7 +696,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   replayPill: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 999,
     borderWidth: 1,
@@ -672,5 +716,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 82,
     maxHeight: 168,
+  },
+  svgContainerMicro: {
+    flex: 1,
+    minHeight: 82,
+    maxHeight: 185,
   },
 });

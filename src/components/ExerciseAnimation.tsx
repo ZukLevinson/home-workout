@@ -792,6 +792,7 @@ export interface ExerciseAnimationProps {
   colors: ThemeColors;
   fontsLoaded: boolean;
   compact?: boolean;
+  micro?: boolean;
 }
 
 export default function ExerciseAnimation({
@@ -800,6 +801,7 @@ export default function ExerciseAnimation({
   colors,
   fontsLoaded,
   compact = false,
+  micro = false,
 }: ExerciseAnimationProps): React.ReactElement {
   const [subIdx, setSubIdx] = useState(0);
   const [nowMs, setNowMs] = useState(1200);
@@ -825,11 +827,12 @@ export default function ExerciseAnimation({
       style={[
         styles.container,
         compact && styles.containerCompact,
+        micro && styles.containerMicro,
         { backgroundColor: colors.background, borderColor: colors.border },
       ]}
     >
       {exercise.animKeys.length > 1 && animLabels.length > 0 && (
-        <View style={styles.subToggleRow}>
+        <View style={[styles.subToggleRow, micro && styles.subToggleRowMicro]}>
           {animLabels.map((lbl, idx) => {
             const active = idx === subIdx;
             return (
@@ -838,6 +841,7 @@ export default function ExerciseAnimation({
                 onPress={() => setSubIdx(idx)}
                 style={[
                   styles.subToggleBtn,
+                  micro && styles.subToggleBtnMicro,
                   {
                     backgroundColor: active ? colors.primary : colors.card,
                     borderColor: active ? colors.primary : colors.border,
@@ -845,8 +849,10 @@ export default function ExerciseAnimation({
                 ]}
               >
                 <Text
+                  numberOfLines={1}
                   style={[
                     styles.subToggleText,
+                    micro && { fontSize: 11 },
                     {
                       color: active ? colors.primaryForeground : colors.foreground,
                       fontFamily: fontForWeight('semibold', fontsLoaded),
@@ -863,6 +869,7 @@ export default function ExerciseAnimation({
 
       <View style={styles.cueHeader}>
         <Text
+          numberOfLines={1}
           style={[
             styles.cueText,
             { color: colors.primary, fontFamily: fontForWeight('semibold', fontsLoaded) },
@@ -870,19 +877,26 @@ export default function ExerciseAnimation({
         >
           {frame.label}
         </Text>
-        <View style={[styles.loopBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text
-            style={[
-              styles.loopBadgeText,
-              { color: colors.mutedForeground, fontFamily: fontForWeight('regular', fontsLoaded) },
-            ]}
-          >
-            הדגמה חיה בלופ
-          </Text>
-        </View>
+        {!micro && (
+          <View style={[styles.loopBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text
+              style={[
+                styles.loopBadgeText,
+                { color: colors.mutedForeground, fontFamily: fontForWeight('regular', fontsLoaded) },
+              ]}
+            >
+              הדגמה חיה בלופ
+            </Text>
+          </View>
+        )}
       </View>
 
-      <View style={[styles.svgWrapBase, compact ? styles.svgWrapCompact : styles.svgWrapFixed]}>
+      <View
+        style={[
+          styles.svgWrapBase,
+          compact ? (micro ? styles.svgWrapMicro : styles.svgWrapCompact) : styles.svgWrapFixed,
+        ]}
+      >
         <Svg
           viewBox="0 0 280 168"
           width="100%"
@@ -893,32 +907,34 @@ export default function ExerciseAnimation({
         </Svg>
       </View>
 
-      <View style={[styles.metaFooter, { borderTopColor: colors.border }]}>
-        <Text
-          style={[
-            styles.metaText,
-            { color: colors.mutedForeground, fontFamily: fontForWeight('regular', fontsLoaded) },
-          ]}
-        >
-          ⏱{' '}
-          <Text style={{ fontFamily: fontForWeight('bold', fontsLoaded), color: colors.foreground }}>
-            קצב תנועה:
-          </Text>{' '}
-          {exercise.tempo}
-        </Text>
-        <Text
-          style={[
-            styles.metaText,
-            { color: colors.mutedForeground, fontFamily: fontForWeight('regular', fontsLoaded) },
-          ]}
-        >
-          ⏳{' '}
-          <Text style={{ fontFamily: fontForWeight('bold', fontsLoaded), color: colors.foreground }}>
-            מנוחה בין סט לסט:
-          </Text>{' '}
-          {exercise.restSec} שניות
-        </Text>
-      </View>
+      {!micro && (
+        <View style={[styles.metaFooter, { borderTopColor: colors.border }]}>
+          <Text
+            style={[
+              styles.metaText,
+              { color: colors.mutedForeground, fontFamily: fontForWeight('regular', fontsLoaded) },
+            ]}
+          >
+            ⏱{' '}
+            <Text style={{ fontFamily: fontForWeight('bold', fontsLoaded), color: colors.foreground }}>
+              קצב תנועה:
+            </Text>{' '}
+            {exercise.tempo}
+          </Text>
+          <Text
+            style={[
+              styles.metaText,
+              { color: colors.mutedForeground, fontFamily: fontForWeight('regular', fontsLoaded) },
+            ]}
+          >
+            ⏳{' '}
+            <Text style={{ fontFamily: fontForWeight('bold', fontsLoaded), color: colors.foreground }}>
+              מנוחה בין סט לסט:
+            </Text>{' '}
+            {exercise.restSec} שניות
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -934,10 +950,20 @@ const styles = StyleSheet.create({
     padding: 10,
     minHeight: 165,
   },
+  containerMicro: {
+    flex: 1,
+    padding: 7,
+    minHeight: 120,
+    borderRadius: 11,
+  },
   subToggleRow: {
     flexDirection: 'row-reverse',
     gap: 6,
     marginBottom: 8,
+  },
+  subToggleRowMicro: {
+    gap: 4,
+    marginBottom: 4,
   },
   subToggleBtn: {
     flex: 1,
@@ -946,6 +972,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     alignItems: 'center',
+  },
+  subToggleBtnMicro: {
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    borderRadius: 6,
   },
   subToggleText: {
     fontSize: 12,
@@ -985,6 +1016,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 96,
     maxHeight: 195,
+  },
+  svgWrapMicro: {
+    flex: 1,
+    minHeight: 82,
+    maxHeight: 185,
   },
   metaFooter: {
     borderTopWidth: 1,

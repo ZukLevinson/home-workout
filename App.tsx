@@ -110,6 +110,7 @@ export default function App(): React.ReactElement {
   const [infoSubPane, setInfoSubPane] = useState<'demo' | 'steps'>('demo');
   const [guideModalOpen, setGuideModalOpen] = useState<boolean>(false);
   const [exerciseDropdownOpen, setExerciseDropdownOpen] = useState<boolean>(false);
+  const [weightsModalOpen, setWeightsModalOpen] = useState<boolean>(false);
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
   const [muscleFilter, setMuscleFilter] = useState<string>('all');
   const [animPaused, setAnimPaused] = useState<boolean>(false);
@@ -681,6 +682,7 @@ export default function App(): React.ReactElement {
   const selectMainTab = (nextTab: WorkoutTabKey) => {
     setSaveFeedback(null);
     setExerciseDropdownOpen(false);
+    setWeightsModalOpen(false);
     if (nextTab !== 'progress') {
       setLastNonProgressTab(nextTab);
     }
@@ -711,6 +713,7 @@ export default function App(): React.ReactElement {
     const targetEx = visibleExercises[clamped];
     const targetSets = targetEx.sets;
     const clampedSet = Math.max(0, Math.min(targetSets - 1, setIdxOverride));
+    setWeightsModalOpen(false);
     setCurrentExerciseIdx(clamped);
     setCurrentSetIdx(clampedSet);
     setMobilePane('set');
@@ -1126,11 +1129,6 @@ export default function App(): React.ReactElement {
               const atMax = curCfgIdx >= exConfigs.length - 1;
               const trendSummary = getExerciseTrendSummary(ex.id, sortedHistoryDesc, colors);
 
-              const unitLabel =
-                effectiveMode === 'barbell'
-                  ? 'קילוגרם בסך הכל במוט הארוך'
-                  : ex.weightUnitLabel;
-
               const renderSingleSetWorkspace = () => (
                 <View style={styles.singleSetWorkspace}>
                   {/* Set Switcher Pills + Optional Barbell Toggle */}
@@ -1379,44 +1377,82 @@ export default function App(): React.ReactElement {
                       </Pressable>
                     </View>
 
-                    {/* Supported Kilograms Quick Strip + Copy-All */}
+                    {/* Closest Supported Kilograms Quick Strip + More + Copy-All */}
                     <View style={styles.chipsInlineBar}>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.chipsScrollRow}
-                      >
-                        {exConfigs.map((cfg) => {
-                          const selected = cfg.totalWeight === entry.weight;
-                          return (
-                            <Pressable
-                              key={cfg.totalWeight}
-                              onPress={() => selectWeightForSet(ex, setNum, cfg.totalWeight)}
-                              style={[
-                                styles.weightOptionChipCompact,
-                                {
-                                  backgroundColor: selected ? colors.primary : colors.card,
-                                  borderColor: selected ? colors.primary : colors.border,
-                                },
-                              ]}
-                            >
-                              <Text
+                      {(() => {
+                        const anchorIdx =
+                          curCfgIdx >= 0
+                            ? curCfgIdx
+                            : Math.max(
+                                0,
+                                exConfigs.findIndex((c) => c.totalWeight >= entry.weight)
+                              );
+                        const maxQuickWeights = 4;
+                        const hasMoreWeights = exConfigs.length > maxQuickWeights;
+                        const windowStart = Math.max(
+                          0,
+                          Math.min(exConfigs.length - maxQuickWeights, anchorIdx - 1)
+                        );
+                        const visibleConfigs = hasMoreWeights
+                          ? exConfigs.slice(windowStart, windowStart + maxQuickWeights)
+                          : exConfigs;
+
+                        return (
+                          <View style={styles.quickWeightsRow}>
+                            {visibleConfigs.map((cfg) => {
+                              const selected = cfg.totalWeight === entry.weight;
+                              return (
+                                <Pressable
+                                  key={cfg.totalWeight}
+                                  onPress={() => selectWeightForSet(ex, setNum, cfg.totalWeight)}
+                                  style={[
+                                    styles.weightOptionChipCompact,
+                                    {
+                                      backgroundColor: selected ? colors.primary : colors.card,
+                                      borderColor: selected ? colors.primary : colors.border,
+                                    },
+                                  ]}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.smallBtnText,
+                                      {
+                                        color: selected
+                                          ? colors.primaryForeground
+                                          : colors.foreground,
+                                        fontFamily: selected ? fBold : fMed,
+                                      },
+                                    ]}
+                                  >
+                                    {cfg.totalWeight === 0 ? '0 (גוף)' : `${cfg.totalWeight}`}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                            {hasMoreWeights && (
+                              <Pressable
+                                onPress={() => setWeightsModalOpen(true)}
                                 style={[
-                                  styles.smallBtnText,
+                                  styles.moreWeightsChip,
                                   {
-                                    color: selected
-                                      ? colors.primaryForeground
-                                      : colors.foreground,
-                                    fontFamily: selected ? fBold : fMed,
+                                    backgroundColor: colors.primarySoft,
+                                    borderColor: colors.primary,
                                   },
                                 ]}
                               >
-                                {cfg.totalWeight === 0 ? '0 (גוף)' : `${cfg.totalWeight}`}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </ScrollView>
+                                <Text
+                                  style={[
+                                    styles.smallBtnText,
+                                    { color: colors.primary, fontFamily: fBold },
+                                  ]}
+                                >
+                                  עוד ({exConfigs.length}) ▾
+                                </Text>
+                              </Pressable>
+                            )}
+                          </View>
+                        );
+                      })()}
 
                       {effectiveSets > 1 && (
                         <Pressable
@@ -1432,22 +1468,44 @@ export default function App(): React.ReactElement {
                               { color: colors.primary, fontFamily: fSemi },
                             ]}
                           >
-                            לכל הסטים ({unitLabel.includes('ארוך') ? 'מוט' : 'סט'})
+                            לכל הסטים
                           </Text>
                         </Pressable>
                       )}
                     </View>
                   </View>
 
-                  {/* Live Animated Plate Build SVG (Scales cleanly to fit height!) */}
-                  <EquipmentBuildDiagram
-                    compact
-                    cfg={setCfg}
-                    mode={effectiveMode}
-                    paused={animPaused}
-                    colors={colors}
-                    fontsLoaded={fontsLoaded}
-                  />
+                  {/* Live Movement Animation + Weight Assembly Together */}
+                  {isWide ? (
+                    <EquipmentBuildDiagram
+                      compact
+                      cfg={setCfg}
+                      mode={effectiveMode}
+                      paused={animPaused}
+                      colors={colors}
+                      fontsLoaded={fontsLoaded}
+                    />
+                  ) : (
+                    <View style={styles.dualVisualRow}>
+                      <ExerciseAnimation
+                        compact
+                        micro
+                        exercise={ex}
+                        paused={animPaused}
+                        colors={colors}
+                        fontsLoaded={fontsLoaded}
+                      />
+                      <EquipmentBuildDiagram
+                        compact
+                        micro
+                        cfg={setCfg}
+                        mode={effectiveMode}
+                        paused={animPaused}
+                        colors={colors}
+                        fontsLoaded={fontsLoaded}
+                      />
+                    </View>
+                  )}
 
                   {/* Plate Setup Recipe */}
                   <View
@@ -1711,8 +1769,8 @@ export default function App(): React.ReactElement {
                       <View style={styles.mobilePaneTabsRow}>
                         {(
                           [
-                            { id: 'set', label: `🏋️ סט ${setNum} והרכבה` },
-                            { id: 'demo', label: '🎬 הדגמה והסבר' },
+                            { id: 'set', label: `🏋️ סט ${setNum} ואנימציה` },
+                            { id: 'demo', label: '📋 שלבים וסרטונים' },
                             { id: 'trend', label: '📈 מגמה וסטים' },
                           ] as { id: 'set' | 'demo' | 'trend'; label: string }[]
                         ).map((tabItem) => {
@@ -2893,6 +2951,193 @@ export default function App(): React.ReactElement {
         </Pressable>
       </Modal>
 
+      {/* ALL SUPPORTED WEIGHTS MODAL (Opened from "עוד" button inside active set) */}
+      <Modal
+        visible={weightsModalOpen && !!activeEx}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setWeightsModalOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setWeightsModalOpen(false)}>
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={[
+              styles.modalCard,
+              styles.dropdownListModal,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            {activeEx &&
+              (() => {
+                const modalConfigs = getConfigsForExercise(activeEx);
+                const modalMode = getEffectiveMode(activeEx);
+                const modalEntry = getSetEntry(activeEx, activeSetNum);
+                const modalTrend = getExerciseTrendSummary(
+                  activeEx.id,
+                  sortedHistoryDesc,
+                  colors
+                );
+                const prevBest = modalTrend.last ? modalTrend.last.bestWeight : null;
+
+                return (
+                  <>
+                    <View
+                      style={[
+                        styles.rowBetween,
+                        { borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 10 },
+                      ]}
+                    >
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}
+                        >
+                          ⚖️ כל המשקלים הנתמכים ({modalConfigs.length})
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={[
+                            styles.exMetaCompact,
+                            { color: colors.mutedForeground, fontFamily: fReg },
+                          ]}
+                        >
+                          {activeEx.name} • סט {activeSetNum}
+                          {prevBest !== null ? ` • אימון קודם: ${prevBest} קילוגרם` : ''}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => setWeightsModalOpen(false)}
+                        style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
+                      >
+                        <Text
+                          style={[
+                            styles.smallBtnText,
+                            { color: colors.secondaryForeground, fontFamily: fBold },
+                          ]}
+                        >
+                          סגור ✕
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    <ScrollView contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
+                      {modalConfigs.map((cfg) => {
+                        const isCur = cfg.totalWeight === modalEntry.weight;
+                        const isPrev = prevBest !== null && cfg.totalWeight === prevBest;
+                        return (
+                          <View
+                            key={cfg.totalWeight}
+                            style={[
+                              styles.weightModalRow,
+                              {
+                                backgroundColor: isCur ? colors.primarySoft : colors.background,
+                                borderColor: isCur ? colors.primary : colors.border,
+                              },
+                            ]}
+                          >
+                            <Pressable
+                              onPress={() => {
+                                selectWeightForSet(activeEx, activeSetNum, cfg.totalWeight);
+                                setWeightsModalOpen(false);
+                              }}
+                              style={styles.weightModalMainBtn}
+                            >
+                              <View style={styles.weightModalTopLine}>
+                                <Text
+                                  style={[
+                                    styles.subCardTitle,
+                                    {
+                                      color: isCur ? colors.primary : colors.foreground,
+                                      fontFamily: fBold,
+                                    },
+                                  ]}
+                                >
+                                  {cfg.totalWeight === 0
+                                    ? '0 קילוגרם (משקל גוף)'
+                                    : `${cfg.totalWeight} קילוגרם`}
+                                </Text>
+                                {isCur && (
+                                  <View
+                                    style={[
+                                      styles.weightModalTag,
+                                      { backgroundColor: colors.primary },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.dropdownSetsText,
+                                        { color: colors.primaryForeground, fontFamily: fBold },
+                                      ]}
+                                    >
+                                      נבחר ✓
+                                    </Text>
+                                  </View>
+                                )}
+                                {isPrev && (
+                                  <View
+                                    style={[
+                                      styles.weightModalTag,
+                                      {
+                                        backgroundColor: colors.card,
+                                        borderWidth: 1,
+                                        borderColor: colors.border,
+                                      },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.dropdownSetsText,
+                                        { color: colors.mutedForeground, fontFamily: fSemi },
+                                      ]}
+                                    >
+                                      פעם קודמת
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text
+                                numberOfLines={2}
+                                style={[
+                                  styles.subCardText,
+                                  { color: colors.mutedForeground, fontFamily: fReg },
+                                ]}
+                              >
+                                {describeConfigSetup(cfg, modalMode)}
+                              </Text>
+                            </Pressable>
+
+                            {activeEffectiveSets > 1 && (
+                              <Pressable
+                                onPress={() => {
+                                  selectWeightForExercise(activeEx, cfg.totalWeight);
+                                  setWeightsModalOpen(false);
+                                }}
+                                style={[
+                                  styles.copyAllSetsBtn,
+                                  { backgroundColor: colors.card, borderColor: colors.border },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.copyAllSetsText,
+                                    { color: colors.primary, fontFamily: fSemi },
+                                  ]}
+                                >
+                                  לכל הסטים
+                                </Text>
+                              </Pressable>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </ScrollView>
+                  </>
+                );
+              })()}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* GUIDE, EQUIPMENT INVENTORY & SAFETY MODAL */}
       <Modal
         visible={guideModalOpen}
@@ -3537,7 +3782,15 @@ const styles = StyleSheet.create({
   chipsInlineBar: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 6,
+  },
+  quickWeightsRow: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 5,
   },
   weightOptionChipCompact: {
     paddingHorizontal: 9,
@@ -3547,6 +3800,45 @@ const styles = StyleSheet.create({
     minWidth: 36,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  moreWeightsChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dualVisualRow: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    gap: 6,
+    overflow: 'hidden',
+  },
+  weightModalRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    borderWidth: 1.5,
+    borderRadius: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  weightModalMainBtn: {
+    flex: 1,
+    gap: 2,
+  },
+  weightModalTopLine: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  weightModalTag: {
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
   },
   plateRecipeBarCompact: {
     borderWidth: 1,
