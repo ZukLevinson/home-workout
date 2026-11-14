@@ -123,9 +123,34 @@ export default function App() {
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       document.documentElement.lang = 'he';
+      document.documentElement.dir = 'rtl';
       document.title = 'תכנית אימונים ביתית – הדגמות ומעקב התקדמות';
     }
   }, []);
+
+  // Keep html, body, #root, and iOS Safari theme-color synced with dark/light theme background
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const bg = colors.background;
+      const isDark = scheme === 'dark';
+      document.documentElement.style.backgroundColor = bg;
+      document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+      if (document.body) {
+        document.body.style.backgroundColor = bg;
+      }
+      const rootEl = document.getElementById('root');
+      if (rootEl) {
+        rootEl.style.backgroundColor = bg;
+      }
+      let metaTheme = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (!metaTheme) {
+        metaTheme = document.createElement('meta');
+        metaTheme.setAttribute('name', 'theme-color');
+        document.head.appendChild(metaTheme);
+      }
+      metaTheme.setAttribute('content', colors.card);
+    }
+  }, [scheme, colors.background, colors.card]);
 
   useEffect(() => {
     let mounted = true;
@@ -663,160 +688,99 @@ export default function App() {
     >
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
 
-      {/* PINNED COMPACT TOP BAR (Header, Rest Timer, Tabs, Exercise Stepper) */}
+      {/* PINNED COMPACT TOP BAR (Header, Tabs, Exercise Stepper) */}
       <View
         style={[
           styles.topShell,
           { backgroundColor: colors.card, borderBottomColor: colors.border },
         ]}
       >
-        {/* Row 1: Compact Title + Sync + Rest Timer + Guide Modal Trigger */}
+        {/* Row 1: Compact Title + Sync + Utility Buttons */}
         <View style={styles.topRow1}>
-          <View style={styles.topBrandCol}>
-            <View style={styles.topBrandTitleRow}>
-              <Text
-                numberOfLines={1}
-                style={[styles.compactTitle, { color: colors.foreground, fontFamily: fBold }]}
-              >
-                🏋️ תכנית אימונים ביתית
-              </Text>
-              <View
-                style={[
-                  styles.compactSyncBadge,
-                  {
-                    backgroundColor:
-                      syncStatus.mode === 'cloud' ? colors.successSoft : colors.secondary,
-                  },
-                ]}
-              >
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.compactSyncText,
-                    {
-                      color:
-                        syncStatus.mode === 'cloud' ? colors.success : colors.mutedForeground,
-                      fontFamily: fSemi,
-                    },
-                  ]}
-                >
-                  ☁️ {syncStatus.message}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.topUtilityRow}>
-              <Pressable
-                onPress={() => setGuideModalOpen(true)}
-                style={[
-                  styles.utilityBtn,
-                  { backgroundColor: colors.secondary, borderColor: colors.border },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.utilityBtnText,
-                    { color: colors.secondaryForeground, fontFamily: fSemi },
-                  ]}
-                >
-                  📖 מדריך, לוח שבועי וציוד
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => setAnimPaused((p) => !p)}
-                style={[
-                  styles.utilityBtn,
-                  { backgroundColor: colors.background, borderColor: colors.border },
-                ]}
-              >
-                <Text
-                  style={[styles.utilityBtnText, { color: colors.foreground, fontFamily: fMed }]}
-                >
-                  {animPaused ? '▶ הפעל אנימציה' : '⏸ השהה אנימציה'}
-                </Text>
-              </Pressable>
-
-              {Platform.OS === 'web' &&
-                isFirebaseConfigured() &&
-                (!firebaseUser || firebaseUser.isAnonymous) && (
-                  <Pressable
-                    onPress={handleGoogleSignIn}
-                    style={[
-                      styles.utilityBtn,
-                      { backgroundColor: colors.background, borderColor: colors.primary },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.utilityBtnText,
-                        { color: colors.primary, fontFamily: fSemi },
-                      ]}
-                    >
-                      🔗 התחבר עם Google
-                    </Text>
-                  </Pressable>
-                )}
-            </View>
-          </View>
-
-          {/* Compact Inline Rest Timer */}
-          <View
-            style={[
-              styles.compactTimerBox,
-              { backgroundColor: colors.background, borderColor: colors.border },
-            ]}
-          >
+          <View style={styles.topBrandTitleRow}>
             <Text
+              numberOfLines={1}
+              style={[styles.compactTitle, { color: colors.foreground, fontFamily: fBold }]}
+            >
+              🏋️ תכנית אימונים ביתית
+            </Text>
+            <View
               style={[
-                styles.compactTimerVal,
+                styles.compactSyncBadge,
                 {
-                  color: timerFinished ? colors.success : colors.foreground,
-                  fontFamily: fBold,
+                  backgroundColor:
+                    syncStatus.mode === 'cloud' ? colors.successSoft : colors.secondary,
                 },
               ]}
             >
-              {timerFinished ? 'המשך! 💪' : `⏱ ${formatTime(timerSeconds)}`}
-            </Text>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.compactSyncText,
+                  {
+                    color:
+                      syncStatus.mode === 'cloud' ? colors.success : colors.mutedForeground,
+                    fontFamily: fSemi,
+                  },
+                ]}
+              >
+                ☁️ {syncStatus.message}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.topUtilityRow}>
             <Pressable
-              onPress={() => startTimer(60)}
-              style={[styles.miniTimerBtn, { backgroundColor: colors.secondary }]}
+              onPress={() => setGuideModalOpen(true)}
+              style={[
+                styles.utilityBtn,
+                { backgroundColor: colors.secondary, borderColor: colors.border },
+              ]}
             >
               <Text
                 style={[
-                  styles.miniTimerBtnText,
-                  { color: colors.secondaryForeground, fontFamily: fMed },
+                  styles.utilityBtnText,
+                  { color: colors.secondaryForeground, fontFamily: fSemi },
                 ]}
               >
-                60 שניות
+                📖 מדריך, לוח שבועי וציוד
               </Text>
             </Pressable>
+
             <Pressable
-              onPress={() => startTimer(90)}
-              style={[styles.miniTimerBtn, { backgroundColor: colors.secondary }]}
+              onPress={() => setAnimPaused((p) => !p)}
+              style={[
+                styles.utilityBtn,
+                { backgroundColor: colors.background, borderColor: colors.border },
+              ]}
             >
               <Text
-                style={[
-                  styles.miniTimerBtnText,
-                  { color: colors.secondaryForeground, fontFamily: fMed },
-                ]}
+                style={[styles.utilityBtnText, { color: colors.foreground, fontFamily: fMed }]}
               >
-                90 שניות
+                {animPaused ? '▶ הפעל אנימציה' : '⏸ השהה אנימציה'}
               </Text>
             </Pressable>
-            <Pressable
-              onPress={toggleTimer}
-              style={[styles.miniTimerBtn, { backgroundColor: colors.primary }]}
-            >
-              <Text
-                style={[
-                  styles.miniTimerBtnText,
-                  { color: colors.primaryForeground, fontFamily: fBold },
-                ]}
-              >
-                {timerRunning ? 'עצור' : 'הפעל'}
-              </Text>
-            </Pressable>
+
+            {Platform.OS === 'web' &&
+              isFirebaseConfigured() &&
+              (!firebaseUser || firebaseUser.isAnonymous) && (
+                <Pressable
+                  onPress={handleGoogleSignIn}
+                  style={[
+                    styles.utilityBtn,
+                    { backgroundColor: colors.background, borderColor: colors.primary },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.utilityBtnText,
+                      { color: colors.primary, fontFamily: fSemi },
+                    ]}
+                  >
+                    🔗 התחבר עם Google
+                  </Text>
+                </Pressable>
+              )}
           </View>
         </View>
 
@@ -2318,94 +2282,203 @@ export default function App() {
         </View>
       </ScrollView>
 
-      {/* PINNED FULLSCREEN BOTTOM NAVIGATION BAR */}
-      {isWorkoutTab && activeEx && (
-        <View
-          style={[
-            styles.bottomNavBar,
-            { backgroundColor: colors.card, borderTopColor: colors.border },
-          ]}
-        >
-          {/* In RTL row-reverse: first child renders on Right (Previous), middle Save, last on Left (Next / Finish) */}
-          <Pressable
-            disabled={safeExIdx <= 0}
-            onPress={() => goToExercise(safeExIdx - 1)}
-            style={[
-              styles.bottomNavBtn,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-                opacity: safeExIdx <= 0 ? 0.35 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.bottomNavBtnText, { color: colors.foreground, fontFamily: fSemi }]}>
-              → הקודם
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
-              setSaveFeedback(null);
-              setSaveModalOpen(true);
-            }}
-            style={[
-              styles.bottomSaveBtn,
-              {
-                backgroundColor:
-                  totalDoneInView > 0 ? colors.primarySoft : colors.background,
-                borderColor: totalDoneInView > 0 ? colors.primary : colors.border,
-              },
-            ]}
-          >
-            <Text
+      {/* ALWAYS-VISIBLE PERSISTENT BOTTOM DOCK: WORKOUT NAV + REST WATCH + LIVE STATS */}
+      <View
+        style={[
+          styles.bottomDock,
+          { backgroundColor: colors.card, borderTopColor: colors.border },
+        ]}
+      >
+        {isWorkoutTab && activeEx && (
+          <View style={[styles.bottomNavRow, { borderBottomColor: colors.border }]}>
+            {/* In RTL row-reverse: first child renders on Right (Previous), middle Save, last on Left (Next / Finish) */}
+            <Pressable
+              disabled={safeExIdx <= 0}
+              onPress={() => goToExercise(safeExIdx - 1)}
               style={[
-                styles.bottomNavBtnText,
+                styles.bottomNavBtn,
                 {
-                  color: totalDoneInView > 0 ? colors.primary : colors.foreground,
-                  fontFamily: fBold,
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                  opacity: safeExIdx <= 0 ? 0.35 : 1,
                 },
               ]}
             >
-              💾 שמור ({totalDoneInView}/{totalSetsInView})
-            </Text>
-          </Pressable>
-
-          {safeExIdx < visibleExercises.length - 1 ? (
-            <Pressable
-              onPress={() => goToExercise(safeExIdx + 1)}
-              style={[
-                styles.bottomNavBtn,
-                { backgroundColor: colors.primary, borderColor: colors.primary },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.bottomNavBtnText,
-                  { color: colors.primaryForeground, fontFamily: fBold },
-                ]}
-              >
-                הבא ←
+              <Text style={[styles.bottomNavBtnText, { color: colors.foreground, fontFamily: fSemi }]}>
+                → הקודם
               </Text>
             </Pressable>
-          ) : (
+
             <Pressable
               onPress={() => {
                 setSaveFeedback(null);
                 setSaveModalOpen(true);
               }}
               style={[
-                styles.bottomNavBtn,
-                { backgroundColor: colors.success, borderColor: colors.success },
+                styles.bottomSaveBtn,
+                {
+                  backgroundColor:
+                    totalDoneInView > 0 ? colors.primarySoft : colors.background,
+                  borderColor: totalDoneInView > 0 ? colors.primary : colors.border,
+                },
               ]}
             >
-              <Text style={[styles.bottomNavBtnText, { color: '#ffffff', fontFamily: fBold }]}>
-                🏁 סיום ושמירה
+              <Text
+                style={[
+                  styles.bottomNavBtnText,
+                  {
+                    color: totalDoneInView > 0 ? colors.primary : colors.foreground,
+                    fontFamily: fBold,
+                  },
+                ]}
+              >
+                💾 שמור ({totalDoneInView}/{totalSetsInView})
               </Text>
             </Pressable>
-          )}
+
+            {safeExIdx < visibleExercises.length - 1 ? (
+              <Pressable
+                onPress={() => goToExercise(safeExIdx + 1)}
+                style={[
+                  styles.bottomNavBtn,
+                  { backgroundColor: colors.primary, borderColor: colors.primary },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.bottomNavBtnText,
+                    { color: colors.primaryForeground, fontFamily: fBold },
+                  ]}
+                >
+                  הבא ←
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  setSaveFeedback(null);
+                  setSaveModalOpen(true);
+                }}
+                style={[
+                  styles.bottomNavBtn,
+                  { backgroundColor: colors.success, borderColor: colors.success },
+                ]}
+              >
+                <Text style={[styles.bottomNavBtnText, { color: '#ffffff', fontFamily: fBold }]}>
+                  🏁 סיום ושמירה
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+
+        {/* Persistent Rest Watch + Live Workout Stats (Visible across the entire app) */}
+        <View style={styles.watchStatsBar}>
+          <View
+            style={[
+              styles.watchCluster,
+              {
+                backgroundColor: timerFinished ? colors.successSoft : colors.background,
+                borderColor: timerFinished ? colors.success : colors.border,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.compactTimerVal,
+                {
+                  color: timerFinished ? colors.success : colors.foreground,
+                  fontFamily: fBold,
+                },
+              ]}
+            >
+              {timerFinished ? '✓ המשך! 💪' : `⏱ ${formatTime(timerSeconds)}`}
+            </Text>
+            <Pressable
+              onPress={toggleTimer}
+              style={[
+                styles.miniTimerBtn,
+                { backgroundColor: timerRunning ? colors.danger : colors.primary },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.miniTimerBtnText,
+                  { color: colors.primaryForeground, fontFamily: fBold },
+                ]}
+              >
+                {timerRunning ? 'עצור' : 'הפעל'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => startTimer(60)}
+              style={[styles.miniTimerBtn, { backgroundColor: colors.secondary }]}
+            >
+              <Text
+                style={[
+                  styles.miniTimerBtnText,
+                  { color: colors.secondaryForeground, fontFamily: fMed },
+                ]}
+              >
+                60 שניות
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => startTimer(90)}
+              style={[styles.miniTimerBtn, { backgroundColor: colors.secondary }]}
+            >
+              <Text
+                style={[
+                  styles.miniTimerBtnText,
+                  { color: colors.secondaryForeground, fontFamily: fMed },
+                ]}
+              >
+                90 שניות
+              </Text>
+            </Pressable>
+          </View>
+
+          <Pressable
+            onPress={() => {
+              if (currentTab !== 'progress') setCurrentTab('progress');
+            }}
+            style={styles.statsCluster}
+          >
+            {totalSetsInView > 0 && (
+              <View
+                style={[
+                  styles.bottomStatPill,
+                  { backgroundColor: colors.background, borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.bottomStatText,
+                    { color: colors.foreground, fontFamily: fSemi },
+                  ]}
+                >
+                  סטים: {totalDoneInView}/{totalSetsInView}
+                </Text>
+              </View>
+            )}
+            <View
+              style={[
+                styles.bottomStatPill,
+                { backgroundColor: colors.secondary, borderColor: colors.border },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.bottomStatText,
+                  { color: colors.secondaryForeground, fontFamily: fSemi },
+                ]}
+              >
+                🔥 {progressStats.weekWorkouts} השבוע • {progressStats.totalWorkouts} אימונים
+              </Text>
+            </View>
+          </Pressable>
         </View>
-      )}
+      </View>
 
       {/* GUIDE, EQUIPMENT INVENTORY & SAFETY MODAL */}
       <Modal
@@ -2425,6 +2498,13 @@ export default function App() {
               <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
                 📖 מדריך, ציוד ביתי ולוח שבועי
               </Text>
+              {(timerRunning || timerFinished) && (
+                <View style={[styles.compactSyncBadge, { backgroundColor: colors.primarySoft }]}>
+                  <Text style={[styles.compactSyncText, { color: colors.primary, fontFamily: fBold }]}>
+                    {timerFinished ? '✓ המשך! 💪' : `⏱ ${formatTime(timerSeconds)}`}
+                  </Text>
+                </View>
+              )}
               <Pressable
                 onPress={() => setGuideModalOpen(false)}
                 style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
@@ -2599,6 +2679,13 @@ export default function App() {
               <Text style={[styles.saveCardTitle, { color: colors.foreground, fontFamily: fBold }]}>
                 🎉 שמירת האימון ביומן ההתקדמות
               </Text>
+              {(timerRunning || timerFinished) && (
+                <View style={[styles.compactSyncBadge, { backgroundColor: colors.primarySoft }]}>
+                  <Text style={[styles.compactSyncText, { color: colors.primary, fontFamily: fBold }]}>
+                    {timerFinished ? '✓ המשך! 💪' : `⏱ ${formatTime(timerSeconds)}`}
+                  </Text>
+                </View>
+              )}
               <Pressable
                 onPress={() => setSaveModalOpen(false)}
                 style={[styles.smallBtn, { backgroundColor: colors.secondary }]}
@@ -2700,8 +2787,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   webFullscreenRoot: {
-    height: '100dvh',
-    maxHeight: '100dvh',
+    width: '100%',
+    height: '100%',
+    flex: 1,
     overflow: 'hidden',
   },
   flexOne: {
@@ -2721,11 +2809,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 8,
   },
-  topBrandCol: {
-    flex: 1,
-    minWidth: 220,
-    gap: 6,
-  },
   topBrandTitleRow: {
     flexDirection: 'row-reverse',
     flexWrap: 'wrap',
@@ -2733,7 +2816,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   compactTitle: {
-    fontSize: 17,
+    fontSize: 16,
     textAlign: 'right',
     writingDirection: 'rtl',
   },
@@ -2762,23 +2845,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     writingDirection: 'rtl',
   },
-  compactTimerBox: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 11,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
   compactTimerVal: {
     fontSize: 14,
     marginLeft: 2,
   },
   miniTimerBtn: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 7,
   },
   miniTimerBtnText: {
@@ -2852,35 +2925,74 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
-  bottomNavBar: {
+  bottomDock: {
+    borderTopWidth: 1,
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
+    gap: 8,
+  },
+  bottomNavRow: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
-    borderTopWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderBottomWidth: 1,
+    paddingBottom: 8,
   },
   bottomNavBtn: {
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    minWidth: 96,
+    borderRadius: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 88,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bottomSaveBtn: {
     flex: 1,
     borderWidth: 1.5,
-    borderRadius: 12,
+    borderRadius: 11,
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bottomNavBtnText: {
     fontSize: 13,
+    writingDirection: 'rtl',
+  },
+  watchStatsBar: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  watchCluster: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  statsCluster: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bottomStatPill: {
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  bottomStatText: {
+    fontSize: 11,
     writingDirection: 'rtl',
   },
   modalBackdrop: {
